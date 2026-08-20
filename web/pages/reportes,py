@@ -1,0 +1,7 @@
+import streamlit as st
+
+def mostrar():
+    st.subheader("📄 Generador de Reportes")
+    
+    # Aquí irá la generación de reportes
+    st.info("ℹ️ Módulo en construcción - Próximamente generará reportes en Excel/PDF")
