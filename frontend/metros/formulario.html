@@ -9,12 +9,7 @@
     <style>
 
  
-        /* ============================================================
-        ESTILOS DEL FORMULARIO - CELDAS MÁS ANGOSTAS
-        ============================================================ */
-        /* ============================================================
-   ESTILOS DEL FORMULARIO - CELDAS MÁS ANGOSTAS
-   ============================================================ */
+
         .detalle-row {
             display: grid;
             grid-template-columns: 0.4fr 0.35fr 1.2fr 0.6fr 0.8fr 0.5fr 0.3fr 0.3fr 0.3fr 0.4fr 0.4fr 0.25fr;
@@ -388,7 +383,7 @@
         async function cargarOperadoresYEquipos() {
             try {
                 // Cargar operadores
-                const responseOp = await fetch('http://localhost:8000/api/operadores');
+                const responseOp = await fetch(`${API_URL}/operadores`);
                 operadoresCache = await responseOp.json();
                 const operadorSelect = document.getElementById('operador');
                 if (operadorSelect) {
@@ -402,7 +397,7 @@
                 }
 
                 // Cargar equipos
-                const responseEq = await fetch('http://localhost:8000/api/equipos');
+                const responseEq = await fetch(`${API_URL}/equipos`);
                 equiposCache = await responseEq.json();
                 console.log('🚜 Equipos cargados:', equiposCache.length);
                 console.log('📋 Primer equipo:', equiposCache[0]);  // 👈 Ver qué tiene
