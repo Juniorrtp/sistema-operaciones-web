@@ -1,7 +1,6 @@
 from core.database import get_db
 
 class StockCache:
-    """Cache de stock - Adaptado de tu código"""
     _instance = None
     
     @classmethod
@@ -16,20 +15,19 @@ class StockCache:
     
     def _actualizar_cache(self):
         db = get_db()
-        # 🔥 Adaptado a tu tabla movimiento_detalles
-        query = """
-            SELECT UPPER(TRIM(codigo)), SUM(cantidad)
-            FROM movimiento_detalles 
-            GROUP BY UPPER(TRIM(codigo))
-        """
         try:
-            resultados = db.execute_query(query)
-            self._cache = {}
-            for row in resultados:
-                codigo = row[0]
-                stock = row[1] if row[1] else 0
+            # Obtener todos los detalles con cantidad > 0
+            result = db.client.table("movimiento_detalles").select("codigo, cantidad").execute()
+            
+            cache = {}
+            for row in result.data:
+                codigo = row.get('codigo')
+                cantidad = row.get('cantidad', 0)
                 if codigo:
-                    self._cache[codigo.upper().strip()] = stock
+                    codigo_clean = codigo.upper().strip()
+                    cache[codigo_clean] = cache.get(codigo_clean, 0) + cantidad
+            
+            self._cache = cache
         except Exception as e:
             print(f"Error actualizando cache: {e}")
             self._cache = {}
