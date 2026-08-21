@@ -334,19 +334,31 @@
     SCRIPTS
     ============================================================ -->
     <script src="../js/api.js"></script>
+
     <script>
 
-        // ============================================================
-        // VARIABLES GLOBALES
-        // ============================================================
+        const isLocal = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname === '';
 
+        const API_BASE = isLocal 
+            ? 'http://localhost:8000' 
+            : 'https://sistema-operaciones-web.onrender.com';
+
+        const API_URL = `${API_BASE}/api`;
+
+        console.log(`🌐 API URL: ${API_URL}`);
+    </script>
+
+
+
+    <script>
+    
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         let detalles = [];
 
-        // ============================================================
-        // INICIALIZAR
-        // ============================================================
+  
 
         document.addEventListener('DOMContentLoaded', function() {
             cargarOperadoresYEquipos(); 
@@ -500,10 +512,10 @@
                 guia: guia,
                 movimiento: movimiento,
                 estado: document.getElementById('estado').value,
-                operador: document.getElementById('operador').value.trim(),
-                equipo: document.getElementById('equipo').value.trim(),
-                guardia: document.getElementById('guardia').value.trim(),
-                compania: document.getElementById('compania').value.trim(),
+                operador: document.getElementById('operador').value,
+                equipo: document.getElementById('equipo').value,
+                guardia: document.getElementById('guardia').value,
+                compania: document.getElementById('compania').value,
                 detalles: detalles
             };
 
@@ -517,9 +529,16 @@
 
                 if (result && result.success) {
                     mostrarNotificacion('✅ Movimiento guardado correctamente');
-                    setTimeout(() => {
-                        window.location.href = 'listar.html';
-                    }, 1500);
+                    
+                    // 🔥 Si es nuevo (no edición), limpiar formulario pero mantener fecha, año, mes, turno
+                    if (!id) {
+                        limpiarFormularioNuevo();
+                    } else {
+                        // Si es edición, volver a la lista
+                        setTimeout(() => {
+                            window.location.href = 'listar.html';
+                        }, 1500);
+                    }
                 } else {
                     mostrarNotificacion('❌ Error al guardar: ' + (result?.detail || 'Error desconocido'), 'danger');
                 }
@@ -529,7 +548,29 @@
             }
         }
 
-        // ============================================================
+        // 🔥 Función para limpiar formulario después de guardar
+        function limpiarFormularioNuevo() {
+            // Limpiar guía
+            document.getElementById('guia').value = '';
+            
+            // Limpiar estado
+            document.getElementById('estado').value = '';
+            
+            // Limpiar operador y equipo
+            document.getElementById('operador').value = '';
+            document.getElementById('equipo').value = '';
+            document.getElementById('guardia').value = '';
+            document.getElementById('compania').value = '';
+            
+            // Limpiar detalles
+            const container = document.getElementById('detallesContainer');
+            container.innerHTML = '';
+            agregarDetalle(); // Agregar una fila vacía
+            
+            // Enfocar en guía para el próximo ingreso
+            document.getElementById('guia').focus();
+        }
+                // ============================================================
         // BUSCADOR DE ACEROS
         // ============================================================
 
@@ -577,9 +618,9 @@
 
             try {
                 // Llamar a la API para buscar aceros
-                const response = await fetch(`http://localhost:8000/api/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`);
+                    
                 const aceros = await response.json();
-
+                const response = await fetch(`${API_URL}/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`);
                 acerosCache = aceros;
 
                 if (!aceros || aceros.length === 0) {
@@ -628,7 +669,7 @@
         async function cargarOperadoresYEquipos() {
             try {
                 // Cargar operadores
-                const responseOp = await fetch('http://localhost:8000/api/operadores');
+                const responseOp = await fetch(`${API_URL}/operadores`);
                 operadoresCache = await responseOp.json();
                 console.log('Operadores:', operadoresCache);
                 
@@ -644,7 +685,7 @@
                 }
 
                 // Cargar equipos
-                const responseEq = await fetch('http://localhost:8000/api/equipos');
+                const responseEq = await fetch(`${API_URL}/equipos`);
                 equiposCache = await responseEq.json();
                 console.log('Equipos:', equiposCache);
                 
