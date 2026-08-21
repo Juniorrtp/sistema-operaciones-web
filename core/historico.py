@@ -315,7 +315,6 @@ def obtener_historico_equipo(equipo, ano=None):
             })
     
     return historico
-
 def calcular_rendimiento_mes(equipo, brazo, familia, tipo_acero, objetivo, ultimo_ano, ultimo_mes):
     """Calcula rendimiento del último mes por BRAZO"""
     db = get_db()
@@ -337,62 +336,84 @@ def calcular_rendimiento_mes(equipo, brazo, familia, tipo_acero, objetivo, ultim
     # Obtener metros del mes
     if tipo_acero == "RIMADORAS":
         if brazo and brazo != "":
-            metros = db.execute_query(f"""
+            query = f"""
                 SELECT COALESCE(SUM(rd.mp_rimado), 0) as total
                 FROM metros_general rg
                 JOIN metros_detalles rd ON rg.id = rd.registro_id
                 WHERE rg.equipo = ? AND rg.ano = ? AND rg.mes = ?
                 {cond_brazo}
-            """, (equipo, ultimo_ano, ultimo_mes, brazo))
+            """
+            metros = db.execute_query(query, (equipo, ultimo_ano, ultimo_mes, brazo))
         else:
-            metros = db.execute_query(f"""
+            query = f"""
                 SELECT COALESCE(SUM(rd.mp_rimado), 0) as total
                 FROM metros_general rg
                 JOIN metros_detalles rd ON rg.id = rd.registro_id
                 WHERE rg.equipo = ? AND rg.ano = ? AND rg.mes = ?
                 {cond_brazo}
-            """, (equipo, ultimo_ano, ultimo_mes))
+            """
+            metros = db.execute_query(query, (equipo, ultimo_ano, ultimo_mes))
     else:
         if brazo and brazo != "":
-            metros = db.execute_query(f"""
+            query = f"""
                 SELECT COALESCE(SUM(rd.total_mp), 0) as total
                 FROM metros_general rg
                 JOIN metros_detalles rd ON rg.id = rd.registro_id
                 WHERE rg.equipo = ? AND rg.ano = ? AND rg.mes = ?
                 {cond_brazo}
-            """, (equipo, ultimo_ano, ultimo_mes, brazo))
+            """
+            metros = db.execute_query(query, (equipo, ultimo_ano, ultimo_mes, brazo))
         else:
-            metros = db.execute_query(f"""
+            query = f"""
                 SELECT COALESCE(SUM(rd.total_mp), 0) as total
                 FROM metros_general rg
                 JOIN metros_detalles rd ON rg.id = rd.registro_id
                 WHERE rg.equipo = ? AND rg.ano = ? AND rg.mes = ?
                 {cond_brazo}
-            """, (equipo, ultimo_ano, ultimo_mes))
+            """
+            metros = db.execute_query(query, (equipo, ultimo_ano, ultimo_mes))
     
-    metros_valor = metros[0]['total'] if metros else 0
+    # 🔥 CORREGIDO: Manejar el resultado correctamente
+    if metros and len(metros) > 0:
+        # Si es una lista de diccionarios
+        if isinstance(metros[0], dict):
+            metros_valor = metros[0].get('total', 0)
+        else:
+            # Si es una tupla
+            metros_valor = metros[0][0] if metros[0] else 0
+    else:
+        metros_valor = 0
     
     # Obtener consumo del mes
     if brazo and brazo != "":
-        consumo = db.execute_query(f"""
+        query_consumo = f"""
             SELECT COALESCE(SUM(ABS(dea.cantidad)), 0) as total
             FROM movimiento_general ea
             JOIN movimiento_detalles dea ON ea.id = dea.entrega_id
             WHERE ea.equipo = ? AND ea.movimiento = 'SALIDA'
             AND dea.familia = ? AND ea.ano = ? AND ea.mes = ?
             {cond_brazo_consumo}
-        """, (equipo, familia, ultimo_ano, ultimo_mes, brazo))
+        """
+        consumo = db.execute_query(query_consumo, (equipo, familia, ultimo_ano, ultimo_mes, brazo))
     else:
-        consumo = db.execute_query(f"""
+        query_consumo = f"""
             SELECT COALESCE(SUM(ABS(dea.cantidad)), 0) as total
             FROM movimiento_general ea
             JOIN movimiento_detalles dea ON ea.id = dea.entrega_id
             WHERE ea.equipo = ? AND ea.movimiento = 'SALIDA'
             AND dea.familia = ? AND ea.ano = ? AND ea.mes = ?
             {cond_brazo_consumo}
-        """, (equipo, familia, ultimo_ano, ultimo_mes))
+        """
+        consumo = db.execute_query(query_consumo, (equipo, familia, ultimo_ano, ultimo_mes))
     
-    consumo_valor = consumo[0]['total'] if consumo else 0
+    # 🔥 CORREGIDO: Manejar el resultado del consumo
+    if consumo and len(consumo) > 0:
+        if isinstance(consumo[0], dict):
+            consumo_valor = consumo[0].get('total', 0)
+        else:
+            consumo_valor = consumo[0][0] if consumo[0] else 0
+    else:
+        consumo_valor = 0
     
     rendimiento = metros_valor / consumo_valor if consumo_valor > 0 else 0
     eficiencia = (rendimiento / objetivo * 100) if objetivo > 0 and rendimiento > 0 else 0
