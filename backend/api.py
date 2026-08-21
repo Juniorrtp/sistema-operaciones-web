@@ -1,14 +1,29 @@
+# ============================================================
+# IMPORTS
+# ============================================================
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from typing import List, Optional
 from datetime import datetime
+import os
+import sys
+
+# 🔥 Agregar directorio backend al path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from models import MovimientoCreate, MovimientoUpdate, MetroCreate, DetalleMovimiento
 from database import get_db
 
+# ============================================================
+# CREAR APP
+# ============================================================
 app = FastAPI(title="API Sistema de Operaciones")
 
-# CORS
+# ============================================================
+# CORS (UNA SOLA VEZ)
+# ============================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,10 +32,187 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db = get_db()
+# ============================================================
+# SERVIR ARCHIVOS ESTÁTICOS (Frontend)
+# ============================================================
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+# Crear directorio frontend si no existe (para Render)
+os.makedirs(FRONTEND_DIR, exist_ok=True)
+
+# Montar archivos estáticos
+if os.path.exists(os.path.join(FRONTEND_DIR, "css")):
+    app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
+if os.path.exists(os.path.join(FRONTEND_DIR, "js")):
+    app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
+if os.path.exists(os.path.join(FRONTEND_DIR, "movimientos")):
+    app.mount("/movimientos", StaticFiles(directory=os.path.join(FRONTEND_DIR, "movimientos")), name="movimientos")
+if os.path.exists(os.path.join(FRONTEND_DIR, "metros")):
+    app.mount("/metros", StaticFiles(directory=os.path.join(FRONTEND_DIR, "metros")), name="metros")
+if os.path.exists(os.path.join(FRONTEND_DIR, "stock")):
+    app.mount("/stock", StaticFiles(directory=os.path.join(FRONTEND_DIR, "stock")), name="stock")
 
 # ============================================================
-# MOVIMIENTOS
+# ENDPOINTS DE PÁGINAS HTML
+# ============================================================
+
+@app.get("/")
+async def servir_index():
+    """Sirve la página principal"""
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "index.html no encontrado"}
+
+@app.get("/{pagina}.html")
+async def servir_pagina(pagina: str):
+    """Sirve cualquier página HTML"""
+    archivo = os.path.join(FRONTEND_DIR, f"{pagina}.html")
+    if os.path.exists(archivo):
+        return FileResponse(archivo)
+    return {"error": "Página no encontrada"}
+
+
+# ============================================================
+# VARIABLE GLOBAL DE STOCK
+# ============================================================
+stock_cache = {}
+
+def actualizar_cache_stock():
+    """Actualiza el cache de stock en memoria"""
+    global stock_cache
+    try:
+        print("🔄 ACTUALIZANDO CACHE DE STOCK...")
+        db = get_db()
+        
+        page = 0
+        page_size = 1000
+        all_data = []
+        
+        while True:
+            result = db.client.table("movimiento_detalles") \
+                .select("codigo, cantidad") \
+                .range(page * page_size, (page + 1) * page_size - 1) \
+                .execute()
+            
+            if not result.data:
+                break
+            
+            all_data.extend(result.data)
+            print(f"📄 Página {page + 1}: {len(result.data)} registros")
+            
+            if len(result.data) < page_size:
+                break
+            
+            page += 1
+        
+        print(f"📊 Total registros traídos: {len(all_data)}")
+        
+        stock_temp = {}
+        for row in all_data:
+            cod = row.get('codigo')
+            cantidad = row.get('cantidad', 0)
+            if cod and cantidad != 0:
+                cod_clean = cod.upper().strip()
+                stock_temp[cod_clean] = stock_temp.get(cod_clean, 0) + cantidad
+        
+        stock_cache = stock_temp
+        
+        positivos = len([k for k, v in stock_cache.items() if v > 0])
+        print(f"✅ Cache: {len(stock_cache)} productos, {positivos} con stock positivo")
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    """Carga el stock al iniciar la API"""
+    print("🚀 INICIANDO API...")
+    actualizar_cache_stock()
+
+
+# ============================================================
+# STOCK - ENDPOINTS
+# ============================================================
+
+@app.get("/api/stock")
+async def get_all_stock():
+    """Obtiene todo el stock desde el cache"""
+    stock_positivo = {k: v for k, v in stock_cache.items() if v > 0}
+    return [{"codigo": k, "stock": v} for k, v in stock_positivo.items()]
+
+@app.get("/api/stock/{codigo}")
+async def get_stock(codigo: str):
+    """Obtiene stock de un producto desde el cache"""
+    if not codigo:
+        return {"codigo": codigo, "stock": 0}
+    stock = stock_cache.get(codigo.upper().strip(), 0)
+    return {"codigo": codigo, "stock": stock}
+
+@app.get("/api/stock/debug")
+async def debug_stock_cache():
+    """Muestra el cache de stock para depuración"""
+    return {
+        "total_productos": len(stock_cache),
+        "productos_con_stock": len([k for k, v in stock_cache.items() if v > 0]),
+        "ejemplos": dict(list(stock_cache.items())[:10])
+    }
+
+
+# ============================================================
+# DETALLES DE MOVIMIENTOS (descripciones)
+# ============================================================
+
+@app.get("/api/detalles-movimientos")
+async def get_movimientos_detalles():
+    """Obtiene todos los detalles de movimientos con código y descripción"""
+    try:
+        db = get_db()
+        
+        page = 0
+        page_size = 1000
+        all_data = []
+        
+        while True:
+            result = db.client.table("movimiento_detalles") \
+                .select("codigo, descripcion") \
+                .range(page * page_size, (page + 1) * page_size - 1) \
+                .execute()
+            
+            if not result.data:
+                break
+            
+            all_data.extend(result.data)
+            
+            if len(result.data) < page_size:
+                break
+            
+            page += 1
+        
+        descripciones = {}
+        for row in all_data:
+            codigo = row.get('codigo')
+            descripcion = row.get('descripcion')
+            if codigo:
+                if descripcion and descripcion.strip():
+                    if codigo not in descripciones or len(descripcion) > len(descripciones.get(codigo, '')):
+                        descripciones[codigo] = descripcion.strip()
+                else:
+                    if codigo not in descripciones:
+                        descripciones[codigo] = codigo
+        
+        data = [{'codigo': k, 'descripcion': v} for k, v in descripciones.items()]
+        print(f"📦 {len(data)} detalles con descripción")
+        return data
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return []
+
+
+# ============================================================
+# MOVIMIENTOS - ENDPOINTS
 # ============================================================
 
 @app.get("/api/movimientos")
@@ -31,6 +223,7 @@ async def listar_movimientos(
     limit: int = 100
 ):
     try:
+        db = get_db()
         query = db.client.table("movimiento_general").select("*")
         
         if fecha_desde:
@@ -46,9 +239,11 @@ async def listar_movimientos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/movimientos/{id}")
 async def obtener_movimiento(id: int):
     try:
+        db = get_db()
         general = db.get_by_id("movimiento_general", id)
         if not general:
             raise HTTPException(status_code=404, detail="No encontrado")
@@ -60,11 +255,9 @@ async def obtener_movimiento(id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @app.post("/api/movimientos")
 async def crear_movimiento(data: MovimientoCreate):
     try:
-        # 🔥 Obtener la conexión a la base de datos UNA SOLA VEZ
         db = get_db()
         
         cabecera = data.model_dump(exclude={'detalles'})
@@ -79,25 +272,11 @@ async def crear_movimiento(data: MovimientoCreate):
             raise HTTPException(status_code=500, detail="Error al guardar cabecera")
         
         movimiento_id = result.data[0]['id']
-        
         es_salida = data.movimiento == "SALIDA"
         
         for detalle in data.detalles:
             nuevo_detalle = detalle.model_dump()
             nuevo_detalle['entrega_id'] = movimiento_id
-            
-            # 🔥 Buscar el acero en la tabla `aceros`
-            codigo = detalle.codigo
-            if codigo:
-                acero_result = db.client.table("aceros").select("*").eq("codigo", codigo).execute()
-                if acero_result.data:
-                    acero = acero_result.data[0]
-                    nuevo_detalle['familia'] = acero.get('familia', '')
-                    nuevo_detalle['tipo_perforacion'] = acero.get('tipo_perforacion', '')
-                    nuevo_detalle['proveedor'] = acero.get('proveedor', '')
-                    nuevo_detalle['marca'] = acero.get('marca', '')
-                    if not nuevo_detalle.get('descripcion'):
-                        nuevo_detalle['descripcion'] = acero.get('descripcion', '')
             
             if es_salida:
                 nuevo_detalle['cantidad'] = -abs(detalle.cantidad)
@@ -107,7 +286,6 @@ async def crear_movimiento(data: MovimientoCreate):
             db.client.table("movimiento_detalles").insert(nuevo_detalle).execute()
         
         actualizar_cache_stock()
-        
         return {"success": True, "id": movimiento_id}
     except Exception as e:
         print(f"❌ Error al guardar movimiento: {e}")
@@ -119,6 +297,7 @@ async def crear_movimiento(data: MovimientoCreate):
 @app.put("/api/movimientos/{id}")
 async def actualizar_movimiento(id: int, data: MovimientoUpdate):
     try:
+        db = get_db()
         data_dict = {k: v for k, v in data.dict().items() if v is not None}
         if data_dict:
             db.client.table("movimiento_general").update(data_dict).eq("id", id).execute()
@@ -126,12 +305,14 @@ async def actualizar_movimiento(id: int, data: MovimientoUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/api/movimientos/{id}")
 async def eliminar_movimiento(id: int):
     try:
+        db = get_db()
         db.client.table("movimiento_detalles").delete().eq("entrega_id", id).execute()
         db.client.table("movimiento_general").delete().eq("id", id).execute()
-        actualizar_cache_stock()  # 🔥 Agregar esta línea
+        actualizar_cache_stock()
         return {"success": True}
     except Exception as e:
         print(f"Error en eliminar_movimiento: {e}")
