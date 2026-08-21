@@ -12,32 +12,17 @@ MES_NUMERO = {mes: i+1 for i, mes in enumerate(MESES)}
 
 
 def obtener_anos_disponibles():
-    """Obtiene años disponibles en movimiento_general y metros_general"""
+    """Obtiene años disponibles"""
     db = get_db()
-    
     try:
-        anos_movimiento = db.execute_query("""
-            SELECT DISTINCT ano FROM movimiento_general 
-            WHERE ano IS NOT NULL ORDER BY ano DESC
-        """)
-        anos_metros = db.execute_query("""
-            SELECT DISTINCT ano FROM metros_general 
-            WHERE ano IS NOT NULL ORDER BY ano DESC
-        """)
-        
-        todos_anos = set()
-        for row in anos_movimiento:
-            if row['ano']:
-                todos_anos.add(str(row['ano']))
-        for row in anos_metros:
-            if row['ano']:
-                todos_anos.add(str(row['ano']))
-        
-        if not todos_anos:
-            todos_anos = {str(datetime.now().year)}
-        
-        return sorted(todos_anos, reverse=True)
-    except:
+        result = db.client.table("movimiento_general").select("ano").execute()
+        anos = [str(row['ano']) for row in result.data if row.get('ano')]
+        if not anos:
+            result = db.client.table("metros_general").select("ano").execute()
+            anos = [str(row['ano']) for row in result.data if row.get('ano')]
+        return sorted(set(anos), reverse=True)
+    except Exception as e:
+        print(f"Error en obtener_anos_disponibles: {e}")
         return [str(datetime.now().year)]
 
 
@@ -45,65 +30,109 @@ def obtener_datos_avance_semanal(mes, ano):
     """Obtiene todos los datos para el avance semanal"""
     db = get_db()
     
-    # ===== 1. CONSUMO DEL MES =====
+    # ============================================================
+    # CONSUMO CPM
+    # ============================================================
+    try:
+        query = """
+            SELECT 
+                ea.tipo_perforacion,
+                dea.codigo,
+                dea.descripcion,
+                dea.familia,
+                ea.compania,
+                SUM(ABS(dea.cantidad)) as total
+            FROM movimiento_detalles dea
+            JOIN movimiento_general ea ON dea.entrega_id = ea.id
+            WHERE ea.movimiento = 'SALIDA' 
+                AND ea.mes = ? 
+                AND ea.ano = ?
+                AND ea.estado = 'CPM'
+                AND dea.cantidad < 0
+            GROUP BY ea.tipo_perforacion, dea.codigo, dea.descripcion, 
+                    dea.familia, ea.compania
+            HAVING SUM(ABS(dea.cantidad)) > 0
+        """
+        consumo_cpm = db.execute_query(query, (mes, ano))
+    except Exception as e:
+        print(f"Error en consumo_cpm: {e}")
+        consumo_cpm = []
     
-    # Consumo CPM
-    consumo_cpm = db.execute_query("""
-        SELECT ea.tipo_perforacion, dea.codigo, dea.descripcion, 
-            dea.familia, ea.compania, SUM(ABS(dea.cantidad)) as total
-        FROM movimiento_detalles dea
-        JOIN movimiento_general ea ON ea.id = dea.entrega_id
-        WHERE ea.movimiento = 'SALIDA' 
-        AND ea.mes = ? 
-        AND ea.ano = ?
-        AND ea.estado = 'CPM'
-        GROUP BY ea.tipo_perforacion, dea.codigo, dea.descripcion, 
-                dea.familia, ea.compania
-        HAVING SUM(ABS(dea.cantidad)) > 0
-    """, (mes, ano))
+    # ============================================================
+    # CONSUMO VENTA
+    # ============================================================
+    try:
+        query = """
+            SELECT 
+                ea.tipo_perforacion,
+                dea.codigo,
+                dea.descripcion,
+                dea.familia,
+                ea.compania,
+                SUM(ABS(dea.cantidad)) as total
+            FROM movimiento_detalles dea
+            JOIN movimiento_general ea ON dea.entrega_id = ea.id
+            WHERE ea.movimiento = 'SALIDA' 
+                AND ea.mes = ? 
+                AND ea.ano = ?
+                AND ea.estado = 'VENTA'
+                AND dea.cantidad < 0
+            GROUP BY ea.tipo_perforacion, dea.codigo, dea.descripcion, 
+                    dea.familia, ea.compania
+            HAVING SUM(ABS(dea.cantidad)) > 0
+        """
+        consumo_venta = db.execute_query(query, (mes, ano))
+    except Exception as e:
+        print(f"Error en consumo_venta: {e}")
+        consumo_venta = []
     
-    # Consumo VENTA
-    consumo_venta = db.execute_query("""
-        SELECT ea.tipo_perforacion, dea.codigo, dea.descripcion, 
-            dea.familia, ea.compania, SUM(ABS(dea.cantidad)) as total
-        FROM movimiento_detalles dea
-        JOIN movimiento_general ea ON ea.id = dea.entrega_id
-        WHERE ea.movimiento = 'SALIDA' 
-        AND ea.mes = ? 
-        AND ea.ano = ?
-        AND ea.estado = 'VENTA'
-        GROUP BY ea.tipo_perforacion, dea.codigo, dea.descripcion, 
-                dea.familia, ea.compania
-        HAVING SUM(ABS(dea.cantidad)) > 0
-    """, (mes, ano))
+    # ============================================================
+    # CONSUMO AFILADORAS
+    # ============================================================
+    try:
+        query = """
+            SELECT 
+                ea.tipo_perforacion,
+                dea.codigo,
+                dea.descripcion,
+                dea.familia,
+                ea.compania,
+                SUM(ABS(dea.cantidad)) as total
+            FROM movimiento_detalles dea
+            JOIN movimiento_general ea ON dea.entrega_id = ea.id
+            WHERE ea.movimiento = 'SALIDA' 
+                AND ea.mes = ? 
+                AND ea.ano = ?
+                AND ea.estado = 'AFILADORAS'
+                AND dea.cantidad < 0
+            GROUP BY ea.tipo_perforacion, dea.codigo, dea.descripcion, 
+                    dea.familia, ea.compania
+            HAVING SUM(ABS(dea.cantidad)) > 0
+        """
+        consumo_copas = db.execute_query(query, (mes, ano))
+    except Exception as e:
+        print(f"Error en consumo_copas: {e}")
+        consumo_copas = []
     
-    # Consumo AFILADORAS
-    consumo_copas = db.execute_query("""
-        SELECT ea.tipo_perforacion, dea.codigo, dea.descripcion, 
-            dea.familia, ea.compania, SUM(ABS(dea.cantidad)) as total
-        FROM movimiento_detalles dea
-        JOIN movimiento_general ea ON ea.id = dea.entrega_id
-        WHERE ea.movimiento = 'SALIDA' 
-        AND ea.mes = ? 
-        AND ea.ano = ?
-        AND ea.estado = 'AFILADORAS'
-        GROUP BY ea.tipo_perforacion, dea.codigo, dea.descripcion, 
-                dea.familia, ea.compania
-        HAVING SUM(ABS(dea.cantidad)) > 0
-    """, (mes, ano))
-    
-    # ===== 2. STOCK ACUMULADO =====
+    # ============================================================
+    # STOCK ACUMULADO
+    # ============================================================
     mes_actual_num = MES_NUMERO.get(mes, 1)
     
-    todos_movimientos = db.execute_query("""
-        SELECT dea.codigo, dea.descripcion, dea.familia, dea.tipo_perforacion,
-               ea.movimiento, ea.estado, dea.cantidad, ea.mes, ea.ano
-        FROM movimiento_detalles dea
-        JOIN movimiento_general ea ON ea.id = dea.entrega_id
-        WHERE dea.descripcion IS NOT NULL 
-        AND TRIM(dea.descripcion) != ''
-        AND (ea.estado = 'CPM' OR ea.estado = 'AFILADORAS' OR ea.estado = 'VENTA')
-    """)
+    try:
+        query = """
+            SELECT dea.codigo, dea.descripcion, dea.familia, dea.tipo_perforacion,
+                   ea.movimiento, ea.estado, dea.cantidad, ea.mes, ea.ano
+            FROM movimiento_detalles dea
+            JOIN movimiento_general ea ON dea.entrega_id = ea.id
+            WHERE dea.descripcion IS NOT NULL 
+                AND TRIM(dea.descripcion) != ''
+                AND (ea.estado = 'CPM' OR ea.estado = 'AFILADORAS' OR ea.estado = 'VENTA')
+        """
+        todos_movimientos = db.execute_query(query)
+    except Exception as e:
+        print(f"Error en todos_movimientos: {e}")
+        todos_movimientos = []
     
     stock_cpm = defaultdict(float)
     stock_cpm_info = {}
@@ -111,20 +140,26 @@ def obtener_datos_avance_semanal(mes, ano):
     stock_copas_info = {}
     
     for row in todos_movimientos:
-        cod = row['codigo']
-        desc = row['descripcion']
-        familia = row['familia']
-        tipo_perf = row['tipo_perforacion']
-        movimiento = row['movimiento']
-        estado = row['estado']
-        cantidad = row['cantidad'] or 0
-        mes_reg = row['mes']
-        ano_reg = str(row['ano']) if row['ano'] else ""
+        cod = row.get('codigo')
+        desc = row.get('descripcion')
+        familia = row.get('familia')
+        tipo_perf = row.get('tipo_perforacion')
+        movimiento = row.get('movimiento')
+        estado = row.get('estado')
+        cantidad = row.get('cantidad') or 0
+        mes_reg = row.get('mes')
+        ano_reg = str(row.get('ano')) if row.get('ano') else ""
+        
+        if not cod:
+            continue
         
         # Solo considerar meses anteriores o iguales al seleccionado
-        if int(ano_reg) > int(ano):
-            continue
-        if int(ano_reg) == int(ano) and MES_NUMERO.get(mes_reg, 0) > mes_actual_num:
+        try:
+            if int(ano_reg) > int(ano):
+                continue
+            if int(ano_reg) == int(ano) and MES_NUMERO.get(mes_reg, 0) > mes_actual_num:
+                continue
+        except:
             continue
         
         if estado in ['CPM', 'VENTA']:
@@ -157,44 +192,53 @@ def obtener_datos_avance_semanal(mes, ano):
     stock_cpm = {k: v for k, v in stock_cpm.items() if v > 0}
     stock_copas = {k: v for k, v in stock_copas.items() if v > 0}
     
-    # ===== 3. METROS PERFORADOS =====
-    metros = db.execute_query("""
-        SELECT g.tipo_perforacion, g.compania,
-            SUM(d.mp_produccion) as mp_produccion, 
-            SUM(d.mp_rimado) as mp_rimado
-        FROM metros_detalles d
-        JOIN metros_general g ON g.id = d.registro_id
-        WHERE g.mes = ? AND g.ano = ?
-        GROUP BY g.tipo_perforacion, g.compania
-    """, (mes, ano))
+    # ============================================================
+    # METROS PERFORADOS
+    # ============================================================
+    try:
+        query = """
+            SELECT g.tipo_perforacion, g.compania,
+                SUM(d.mp_produccion) as mp_produccion, 
+                SUM(d.mp_rimado) as mp_rimado
+            FROM metros_detalles d
+            JOIN metros_general g ON g.id = d.registro_id
+            WHERE g.mes = ? AND g.ano = ?
+            GROUP BY g.tipo_perforacion, g.compania
+        """
+        metros = db.execute_query(query, (mes, ano))
+    except Exception as e:
+        print(f"Error en metros: {e}")
+        metros = []
     
-    # ===== 4. COMPAÑÍAS =====
+    # ============================================================
+    # COMPAÑÍAS
+    # ============================================================
     companias_set = set()
     
     for row in consumo_cpm:
-        if row['compania']:
+        if row.get('compania'):
             companias_set.add(row['compania'])
     for row in consumo_venta:
-        if row['compania']:
+        if row.get('compania'):
             companias_set.add(row['compania'])
     for row in consumo_copas:
-        if row['compania']:
+        if row.get('compania'):
             companias_set.add(row['compania'])
     
     companias = sorted(companias_set)
     
-    # ===== 5. FAMILIAS DE ACEROS =====
-    familias_aceros = {}
+    # ============================================================
+    # FAMILIAS DE ACEROS
+    # ============================================================
     try:
-        aceros = db.execute_query("""
-            SELECT codigo, familia FROM aceros 
-            WHERE familia IS NOT NULL AND TRIM(familia) != ''
-        """)
-        for row in aceros:
-            if row['codigo']:
-                familias_aceros[row['codigo']] = row['familia']
-    except:
-        pass
+        result = db.client.table("aceros").select("codigo, familia").execute()
+        familias_aceros = {}
+        for row in result.data:
+            if row.get('codigo'):
+                familias_aceros[row['codigo']] = row.get('familia', '')
+    except Exception as e:
+        print(f"Error en familias_aceros: {e}")
+        familias_aceros = {}
     
     return {
         'consumo_cpm': consumo_cpm,
@@ -216,14 +260,14 @@ def procesar_consumo(consumo_rows, stock_dict, stock_info, familias_aceros):
     consumo_info = {}
     
     for row in consumo_rows:
-        tipo = row['tipo_perforacion'] or "SIN TIPO"
-        cod = row['codigo']
-        desc = row['descripcion']
-        familia = row['familia']
-        compania = row['compania']
-        cantidad = row['total'] or 0
+        tipo = row.get('tipo_perforacion') or "SIN TIPO"
+        cod = row.get('codigo')
+        desc = row.get('descripcion')
+        familia = row.get('familia')
+        compania = row.get('compania')
+        cantidad = row.get('total') or 0
         
-        if cantidad > 0:
+        if cantidad > 0 and cod:
             key = (tipo, cod, desc, familia)
             consumo[key][compania] += float(cantidad)
             if cod and cod not in consumo_info:
