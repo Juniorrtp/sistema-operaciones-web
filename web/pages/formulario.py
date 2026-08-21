@@ -22,6 +22,7 @@ def mostrar_formulario():
     es_edicion = st.session_state.get('editar_id') is not None
     titulo = "✏️ Editar Movimiento" if es_edicion else "📝 Nuevo Movimiento"
     
+    # Cargar datos si es edición
     if es_edicion and 'dialog_datos_cargados' not in st.session_state:
         datos = obtener_movimiento_por_id(st.session_state.editar_id)
         if datos:
@@ -86,6 +87,7 @@ def mostrar_formulario():
             mov_idx = 0
         movimiento = st.selectbox("Movimiento", movimientos, index=mov_idx, key="dialog_movimiento")
     
+    # Estado
     estados = ["", "CPM", "VENTA", "AFILADORAS", "TRASLADO"]
     if es_edicion and st.session_state.get('dialog_datos'):
         estado_val = st.session_state.dialog_datos['generales'].get('estado', '')
@@ -135,66 +137,72 @@ def mostrar_formulario():
     # ========== DETALLES ==========
     st.markdown("---")
     st.markdown("### 📋 Detalles del Movimiento")
-    st.caption("💡 Cada fila tiene su propio ID. Usa '🗑️' para eliminar esa fila específica.")
+    st.caption("💡 Cada detalle se muestra individualmente. Usa 'Buscar Acero' para encontrar productos.")
     
-    # Inicializar detalles con ID
+    # Inicializar detalles
     if 'dialog_detalles' not in st.session_state:
         if es_edicion and st.session_state.get('dialog_datos'):
             detalles = st.session_state.dialog_datos['detalles']
-            st.session_state.dialog_detalles = []
-            for d in detalles:
-                st.session_state.dialog_detalles.append({
-                    'id': generar_id(),
-                    'brazo': d.get('brazo', ''),
-                    'codigo': d.get('codigo', ''),
-                    'descripcion': d.get('descripcion', ''),
-                    'cantidad': d.get('cantidad', 0),
-                    'motivo': d.get('motivo', '')
-                })
+            st.session_state.dialog_detalles = [dict(d) for d in detalles]
         else:
             st.session_state.dialog_detalles = [{
                 'id': generar_id(),
                 'brazo': '', 'codigo': '', 'descripcion': '', 'cantidad': 0, 'motivo': ''
             }]
     
-    # ========== MOSTRAR FILAS ==========
-    # Usar un índice de posición para mostrar, pero el ID para las keys
+    # ========== MOSTRAR DETALLES UNO DEBAJO DE OTRO ==========
+    detalles_actualizados = []
+    
     for idx, detalle in enumerate(st.session_state.dialog_detalles):
-        detalle_id = detalle['id']
+        detalle_id = detalle.get('id', f"det_{idx}")
         
         with st.container():
             st.markdown(f"**Detalle {idx + 1}**")
             
-            col1, col2, col3, col4 = st.columns([2, 2, 1.8, 0.8])
+            col1, col2, col3 = st.columns(3)
             
             with col1:
+                # BRAZO como combobox
                 brazo_opciones = ["", "BRAZO 1", "BRAZO 2"]
-                brazo_idx_selected = brazo_opciones.index(detalle.get('brazo', '')) if detalle.get('brazo', '') in brazo_opciones else 0
+                brazo_idx = brazo_opciones.index(detalle.get('brazo', '')) if detalle.get('brazo', '') in brazo_opciones else 0
                 brazo = st.selectbox(
                     "Brazo",
                     options=brazo_opciones,
-                    index=brazo_idx_selected,
+                    index=brazo_idx,
                     key=f"dialog_brazo_{detalle_id}"
                 )
                 
+                # 🔥 Código
+                codigo_actual = detalle.get('codigo', '')
                 codigo = st.text_input(
                     "Código",
-                    value=detalle.get('codigo', ''),
+                    value=codigo_actual,
                     key=f"dialog_codigo_{detalle_id}"
                 )
+                if codigo != st.session_state.dialog_detalles[idx].get('codigo', ''):
+                    st.session_state.dialog_detalles[idx]['codigo'] = codigo
             
             with col2:
+                # 🔥 Descripción
+                descripcion_actual = detalle.get('descripcion', '')
                 descripcion = st.text_input(
                     "Descripción",
-                    value=detalle.get('descripcion', ''),
+                    value=descripcion_actual,
                     key=f"dialog_desc_{detalle_id}"
                 )
+                if descripcion != st.session_state.dialog_detalles[idx].get('descripcion', ''):
+                    st.session_state.dialog_detalles[idx]['descripcion'] = descripcion
+                
+                # 🔥 Cantidad - mostrar valor absoluto
+                cantidad_valor = detalle.get('cantidad', 0)
+                if isinstance(cantidad_valor, (int, float)) and cantidad_valor < 0:
+                    cantidad_valor = abs(cantidad_valor)
                 
                 cantidad = st.number_input(
                     "Cantidad",
                     min_value=0.0,
                     step=0.5,
-                    value=float(detalle.get('cantidad', 0)),
+                    value=float(cantidad_valor),
                     key=f"dialog_cant_{detalle_id}"
                 )
             
@@ -204,102 +212,126 @@ def mostrar_formulario():
                     value=detalle.get('motivo', ''),
                     key=f"dialog_motivo_{detalle_id}"
                 )
-            
-            with col4:
-                # 🔥 Botón eliminar usando el ID
-                if st.button("🗑️", key=f"del_{detalle_id}", help="Eliminar este detalle"):
-                    if len(st.session_state.dialog_detalles) > 1:
-                        # Eliminar por ID
-                        st.session_state.dialog_detalles = [d for d in st.session_state.dialog_detalles if d['id'] != detalle_id]
+                
+                # 🔥 Botones de acción para esta fila
+                col_btn1, col_btn2, col_btn3 = st.columns(3)
+                with col_btn1:
+                    if st.button("📋 Copiar", key=f"copy_det_{detalle_id}", use_container_width=True):
+                        copia = {
+                            'id': generar_id(),
+                            'brazo': brazo,
+                            'codigo': codigo,
+                            'descripcion': descripcion,
+                            'cantidad': cantidad,
+                            'motivo': motivo
+                        }
+                        st.session_state.dialog_detalles.insert(idx + 1, copia)
                         st.rerun()
-                    else:
-                        st.warning("⚠️ Debe haber al menos un detalle")
+                
+                with col_btn2:
+                    if st.button("🗑️ Eliminar", key=f"del_det_{detalle_id}", use_container_width=True):
+                        if len(st.session_state.dialog_detalles) > 1:
+                            st.session_state.dialog_detalles.pop(idx)
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Debe haber al menos un detalle")
+                
+                with col_btn3:
+                    # Botón para buscar acero
+                    if st.button("🔍 Buscar Acero", key=f"buscar_det_{detalle_id}", use_container_width=True):
+                        st.session_state[f"mostrar_buscador_{detalle_id}"] = True
             
-            # Actualizar valores en session_state
-            for d in st.session_state.dialog_detalles:
-                if d['id'] == detalle_id:
-                    d['brazo'] = brazo
-                    d['codigo'] = codigo
-                    d['descripcion'] = descripcion
-                    d['cantidad'] = cantidad
-                    d['motivo'] = motivo
-                    break
+            # ========== BUSCADOR DE ACEROS ==========
+            if st.session_state.get(f"mostrar_buscador_{detalle_id}", False):
+                with st.expander("🔍 Buscar Acero", expanded=True):
+                    
+                    if movimiento == "SALIDA":
+                        st.info("🔴 Modo SALIDA: Solo se muestran aceros con STOCK DISPONIBLE")
+                    else:
+                        st.info("🟢 Modo INGRESO: Se muestran todos los aceros")
+                    
+                    busqueda = st.text_input("Buscar por código o descripción", key=f"buscar_input_{detalle_id}")
+                    
+                    if busqueda:
+                        aceros = buscar_aceros_con_stock(busqueda, movimiento)
+                        
+                        if aceros:
+                            df_aceros = pd.DataFrame(aceros)
+                            
+                            if movimiento == "SALIDA":
+                                st.dataframe(df_aceros[['codigo', 'descripcion', 'stock']])
+                            else:
+                                st.dataframe(df_aceros[['codigo', 'descripcion']])
+                            
+                            if aceros:
+                                opciones_aceros = [a['codigo'] for a in aceros]
+                                def format_acero(codigo):
+                                    acero = next(a for a in aceros if a['codigo'] == codigo)
+                                    return f"{codigo} - {acero['descripcion']}"
+                                
+                                codigo_seleccionado = st.selectbox(
+                                    "Seleccionar acero",
+                                    options=opciones_aceros,
+                                    format_func=format_acero,
+                                    key=f"select_acero_{detalle_id}"
+                                )
+                                
+                                col_agregar, col_cancelar = st.columns(2)
+                                with col_agregar:
+                                    if st.button("✅ Agregar", key=f"add_acero_{detalle_id}", use_container_width=True, type="primary"):
+                                        if codigo_seleccionado:
+                                            acero = next(a for a in aceros if a['codigo'] == codigo_seleccionado)
+                                            # Actualizar el detalle actual
+                                            st.session_state.dialog_detalles[idx]['codigo'] = acero['codigo']
+                                            st.session_state.dialog_detalles[idx]['descripcion'] = acero['descripcion']
+                                            st.session_state[f"mostrar_buscador_{detalle_id}"] = False
+                                            st.rerun()
+                                with col_cancelar:
+                                    if st.button("❌ Cancelar", key=f"cancel_buscar_{detalle_id}", use_container_width=True):
+                                        st.session_state[f"mostrar_buscador_{detalle_id}"] = False
+                                        st.rerun()
+                        else:
+                            if movimiento == "SALIDA":
+                                st.warning("No se encontraron aceros con stock disponible")
+                            else:
+                                st.warning("No se encontraron aceros")
+            
+            # Guardar datos de esta fila
+            detalles_actualizados.append({
+                'id': detalle_id,
+                'brazo': brazo,
+                'codigo': codigo,
+                'descripcion': descripcion,
+                'cantidad': cantidad,
+                'motivo': motivo
+            })
             
             st.divider()
     
-    # ========== BOTÓN AGREGAR ==========
-    if st.button("➕ Agregar Fila", use_container_width=True):
-        st.session_state.dialog_detalles.append({
-            'id': generar_id(),
-            'brazo': '', 'codigo': '', 'descripcion': '', 'cantidad': 0, 'motivo': ''
-        })
-        st.rerun()
-    
-    # ========== BUSCADOR ==========
-    st.markdown("---")
-    st.markdown("### 🔍 Buscador de Aceros")
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        busqueda = st.text_input("Buscar por código o descripción", key="dialog_busqueda_global")
-    with col2:
-        if st.button("🔍 Buscar", type="primary", use_container_width=True):
-            st.rerun()
-    
-    if busqueda:
-        aceros = buscar_aceros_con_stock(busqueda, movimiento)
-        
-        if aceros:
-            df_aceros = pd.DataFrame(aceros)
-            
-            if movimiento == "SALIDA":
-                st.dataframe(df_aceros[['codigo', 'descripcion', 'stock']])
-            else:
-                st.dataframe(df_aceros[['codigo', 'descripcion']])
-            
-            if aceros:
-                opciones_aceros = [a['codigo'] for a in aceros]
-                def format_acero(codigo):
-                    acero = next(a for a in aceros if a['codigo'] == codigo)
-                    return f"{codigo} - {acero['descripcion']}"
-                
-                codigo_seleccionado = st.selectbox(
-                    "Seleccionar acero",
-                    options=opciones_aceros,
-                    format_func=format_acero,
-                    key="dialog_select_acero"
-                )
-                
-                if st.button("✅ Agregar a detalles", type="primary"):
-                    if codigo_seleccionado:
-                        acero = next(a for a in aceros if a['codigo'] == codigo_seleccionado)
-                        st.session_state.dialog_detalles.append({
-                            'id': generar_id(),
-                            'brazo': '',
-                            'codigo': acero['codigo'],
-                            'descripcion': acero['descripcion'],
-                            'cantidad': 0,
-                            'motivo': ''
-                        })
-                        st.rerun()
-        else:
-            if movimiento == "SALIDA":
-                st.warning("No se encontraron aceros con stock disponible")
-            else:
-                st.warning("No se encontraron aceros")
+    # Actualizar session_state
+    st.session_state.dialog_detalles = detalles_actualizados
     
     # ========== BOTONES ==========
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 1, 3])
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
     with col1:
+        if st.button("➕ Agregar Fila", use_container_width=True):
+            st.session_state.dialog_detalles.append({
+                'id': generar_id(),
+                'brazo': '', 'codigo': '', 'descripcion': '', 'cantidad': 0, 'motivo': ''
+            })
+            st.rerun()
+    
+    with col2:
         if st.button("💾 Guardar", type="primary", use_container_width=True):
             guardar_dialogo()
-    with col2:
+    
+    with col3:
         if st.button("❌ Cancelar", use_container_width=True):
             cerrar_dialogo()
 
 
 def buscar_aceros_con_stock(busqueda, movimiento):
+    """Busca aceros filtrando por stock si es SALIDA"""
     from core.aceros import buscar_aceros
     
     aceros = buscar_aceros(busqueda)
@@ -318,25 +350,27 @@ def buscar_aceros_con_stock(busqueda, movimiento):
 
 
 def guardar_dialogo():
+    """Guarda el formulario"""
     try:
         guia = st.session_state.get('dialog_guia', '')
         if not guia:
             st.error("❌ La Guía es obligatoria")
             return
         
-        # Eliminar el campo 'id' antes de guardar
-        detalles_para_guardar = []
-        for d in st.session_state.dialog_detalles:
-            detalles_para_guardar.append({
-                'brazo': d.get('brazo', ''),
-                'codigo': d.get('codigo', ''),
-                'descripcion': d.get('descripcion', ''),
-                'cantidad': d.get('cantidad', 0),
-                'motivo': d.get('motivo', '')
-            })
+        # Obtener detalles actuales desde session_state
+        detalles = st.session_state.dialog_detalles
+        detalles_validos = []
         
-        detalles_validos = [d for d in detalles_para_guardar 
-                           if d.get('codigo') and d.get('cantidad', 0) > 0]
+        for d in detalles:
+            if d.get('codigo') and d.get('cantidad', 0) > 0:
+                detalles_validos.append({
+                    'brazo': d.get('brazo', ''),
+                    'codigo': d.get('codigo', ''),
+                    'descripcion': d.get('descripcion', ''),
+                    'cantidad': d.get('cantidad', 0),
+                    'motivo': d.get('motivo', '')
+                })
+        
         if not detalles_validos:
             st.error("❌ Debe agregar al menos un item con código y cantidad > 0")
             return
@@ -407,13 +441,17 @@ def guardar_dialogo():
 
 
 def cerrar_dialogo():
+    """Cierra el formulario"""
     st.session_state.mostrar_formulario = False
     st.session_state.editar_id = None
     st.session_state.dialog_detalles = []
     st.session_state.dialog_datos_cargados = False
     
+    # Limpiar keys del diálogo
     for key in list(st.session_state.keys()):
         if key.startswith("dialog_"):
+            del st.session_state[key]
+        if key.startswith("mostrar_buscador_"):
             del st.session_state[key]
     
     st.rerun()
