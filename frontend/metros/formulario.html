@@ -427,7 +427,7 @@
         async function cargarActividades() {
             try {
                 console.log('🔄 Cargando actividades...');
-                const response = await fetch('http://localhost:8000/api/actividades');
+                const response = await fetch(`${API_URL}/actividades`);
                 
                 if (!response.ok) {
                     console.error('❌ Error cargando actividades:', response.status);
