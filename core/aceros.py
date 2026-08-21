@@ -1,94 +1,133 @@
 from core.database import get_db
 from core.stock import StockCache
 
+
 def buscar_aceros(texto_busqueda):
     """Busca aceros por código o descripción"""
     db = get_db()
     stock_cache = StockCache.get_instance()
     
-    query = """
-        SELECT codigo, descripcion, proveedor, marca, familia, subfamilia
-        FROM aceros 
-        WHERE UPPER(TRIM(codigo)) LIKE ? 
-           OR UPPER(TRIM(descripcion)) LIKE ?
-        ORDER BY descripcion
-        LIMIT 50
-    """
-    patron = f"%{texto_busqueda.upper().strip()}%"
-    resultados = db.execute_query(query, (patron, patron))
-    
-    aceros = []
-    for row in resultados:
-        codigo = row[0]
-        stock = stock_cache.obtener_stock(codigo)
-        aceros.append({
-            'codigo': codigo,
-            'descripcion': row[1],
-            'proveedor': row[2] if row[2] else '',
-            'marca': row[3] if row[3] else '',
-            'familia': row[4] if row[4] else '',
-            'subfamilia': row[5] if row[5] else '',
-            'stock': stock
-        })
-    
-    return aceros
+    try:
+        # Buscar aceros usando Supabase
+        result = db.client.table("aceros").select("*").ilike("codigo", f"%{texto_busqueda}%").execute()
+        
+        if not result.data:
+            # Intentar buscar por descripción
+            result = db.client.table("aceros").select("*").ilike("descripcion", f"%{texto_busqueda}%").execute()
+        
+        if not result.data:
+            return []
+        
+        aceros = []
+        for row in result.data:
+            codigo = row.get('codigo', '')
+            stock = stock_cache.obtener_stock(codigo)
+            aceros.append({
+                'codigo': codigo,
+                'descripcion': row.get('descripcion', ''),
+                'proveedor': row.get('proveedor', ''),
+                'marca': row.get('marca', ''),
+                'familia': row.get('familia', ''),
+                'subfamilia': row.get('subfamilia', ''),
+                'stock': stock
+            })
+        
+        return aceros
+        
+    except Exception as e:
+        print(f"Error en buscar_aceros: {e}")
+        return []
 
 
 def obtener_opciones(campo):
-    """Obtiene opciones para filtros"""
+    """Obtiene opciones para filtros usando métodos de Supabase"""
     db = get_db()
     
-    if campo == 'operador':
-        query = "SELECT DISTINCT nombre FROM operador WHERE nombre IS NOT NULL AND nombre != '' ORDER BY nombre"
-        resultados = db.execute_query(query)
-        return [str(row[0]) for row in resultados if row[0]]
-    
-    elif campo == 'equipo':
-        query = "SELECT DISTINCT equipo FROM equipo WHERE equipo IS NOT NULL AND equipo != '' ORDER BY equipo"
-        resultados = db.execute_query(query)
-        return [str(row[0]) for row in resultados if row[0]]
-    
-    elif campo == 'ano':
-        query = "SELECT DISTINCT ano FROM movimiento_general WHERE ano IS NOT NULL ORDER BY ano DESC"
-        resultados = db.execute_query(query)
-        opciones = [str(row[0]) for row in resultados if row[0]]
-        if not opciones:
-            import datetime
-            year = datetime.datetime.now().year
-            opciones = [str(year), str(year-1), str(year-2)]
-        return opciones
-    
-    elif campo == 'estado':
-        query = "SELECT DISTINCT estado FROM movimiento_general WHERE estado IS NOT NULL AND estado != '' ORDER BY estado"
-        resultados = db.execute_query(query)
-        opciones = [str(row[0]) for row in resultados if row[0]]
-        if "TRASLADO" not in opciones:
-            opciones.append("TRASLADO")
-            opciones.sort()
-        return opciones
-    
-    else:
-        query = f"""
-            SELECT DISTINCT {campo} 
-            FROM movimiento_general 
-            WHERE {campo} IS NOT NULL AND {campo} != '' 
-            ORDER BY {campo}
-        """
-        resultados = db.execute_query(query)
-        return [str(row[0]) for row in resultados if row[0]]
+    try:
+        if campo == 'operador':
+            result = db.client.table("operador").select("nombre").execute()
+            nombres = [row['nombre'] for row in result.data if row.get('nombre')]
+            return sorted(set(nombres))
+        
+        elif campo == 'equipo':
+            result = db.client.table("equipo").select("equipo").execute()
+            equipos = [row['equipo'] for row in result.data if row.get('equipo')]
+            return sorted(set(equipos))
+        
+        elif campo == 'ano':
+            result = db.client.table("movimiento_general").select("ano").execute()
+            anos = [row['ano'] for row in result.data if row.get('ano')]
+            anos = sorted(set(anos), reverse=True)
+            if not anos:
+                import datetime
+                year = datetime.datetime.now().year
+                return [str(year), str(year-1), str(year-2)]
+            return [str(a) for a in anos]
+        
+        elif campo == 'estado':
+            result = db.client.table("movimiento_general").select("estado").execute()
+            estados = [row['estado'] for row in result.data if row.get('estado') and row['estado'] != '']
+            estados = sorted(set(estados))
+            if "TRASLADO" not in estados:
+                estados.append("TRASLADO")
+            return estados
+        
+        elif campo == 'tipo_perforacion':
+            result = db.client.table("equipo").select("tipo_perforacion").execute()
+            tipos = [row['tipo_perforacion'] for row in result.data if row.get('tipo_perforacion') and row['tipo_perforacion'] != '']
+            return sorted(set(tipos))
+        
+        elif campo == 'compania':
+            result = db.client.table("equipo").select("compania").execute()
+            companias = [row['compania'] for row in result.data if row.get('compania') and row['compania'] != '']
+            return sorted(set(companias))
+        
+        else:
+            # Para otros campos
+            result = db.client.table("movimiento_general").select(campo).execute()
+            valores = [row[campo] for row in result.data if row.get(campo) and row[campo] != '']
+            return sorted(set(valores))
+            
+    except Exception as e:
+        print(f"Error en obtener_opciones para {campo}: {e}")
+        return []
 
 
 def obtener_operadores_con_guardia():
     """Obtiene lista de operadores con su guardia"""
     db = get_db()
-    query = "SELECT nombre, guardia FROM operador WHERE nombre IS NOT NULL AND nombre != '' ORDER BY nombre"
-    resultados = db.execute_query(query)
-    return [{'nombre': row[0], 'guardia': row[1] if row[1] else ''} for row in resultados]
+    try:
+        result = db.client.table("operador").select("nombre, guardia").execute()
+        return [{'nombre': row['nombre'], 'guardia': row.get('guardia', '')} for row in result.data if row.get('nombre')]
+    except Exception as e:
+        print(f"Error en obtener_operadores_con_guardia: {e}")
+        return []
 
 
 def obtener_equipos_completos():
     """Obtiene lista de equipos con su compañía y tipo"""
     db = get_db()
-    query = "SELECT equipo, compania, tipo_perforacion FROM equipo WHERE equipo IS NOT NULL AND equipo != '' ORDER BY equipo"
-    resultados = db.execute_query(query)
-    return [{'equipo': row[0], 'compania': row[1] if row[1] else '', 'tipo': row[2] if row[2] else ''} for row in resultados]
+    try:
+        result = db.client.table("equipo").select("equipo, compania, tipo_perforacion, ceco_tipo").execute()
+        return [{'equipo': row['equipo'], 'compania': row.get('compania', ''), 
+                 'tipo': row.get('tipo_perforacion', ''), 'ceco': row.get('ceco_tipo', '')} 
+                for row in result.data if row.get('equipo')]
+    except Exception as e:
+        print(f"Error en obtener_equipos_completos: {e}")
+        return []
+
+
+def obtener_actividades():
+    """Obtiene diccionario de actividades {codigo: descripcion}"""
+    db = get_db()
+    try:
+        # Intentar con columna 'codigo'
+        result = db.client.table("actividad").select("codigo, descripcion").execute()
+        
+        if result.data:
+            return {str(row['codigo']): row['descripcion'] for row in result.data if row.get('codigo')}
+        
+        return {}
+    except Exception as e:
+        print(f"Error en obtener_actividades: {e}")
+        return {}
