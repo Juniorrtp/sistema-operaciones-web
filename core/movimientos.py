@@ -25,8 +25,6 @@ def obtener_movimientos(filtros):
             query = query.ilike("guia", f"%{filtros['guia']}%")
         
         query = query.order("fecha", desc=True).order("id", desc=True)
-        
-        # Limitar resultados
         query = query.limit(1000)
         
         result = query.execute()
@@ -44,7 +42,6 @@ def obtener_movimiento_por_id(movimiento_id):
     try:
         # Cabecera
         result = db.client.table("movimiento_general").select("*").eq("id", movimiento_id).execute()
-        
         if not result.data:
             return None
         
@@ -65,11 +62,10 @@ def obtener_movimiento_por_id(movimiento_id):
 
 
 def guardar_movimiento(datos_cabecera, datos_detalles, movimiento_id=None):
-    """Guarda movimiento (nuevo o edición) usando Supabase"""
+    """Guarda movimiento (nuevo o edición)"""
     db = get_db()
     
     try:
-        # Determinar signo según movimiento
         movimiento = datos_cabecera['movimiento']
         for detalle in datos_detalles:
             cantidad = detalle['cantidad']
@@ -80,13 +76,9 @@ def guardar_movimiento(datos_cabecera, datos_detalles, movimiento_id=None):
             detalle['cantidad_final'] = cantidad
         
         if movimiento_id:
-            # ACTUALIZAR
             db.client.table("movimiento_general").update(datos_cabecera).eq("id", movimiento_id).execute()
-            
-            # Eliminar detalles viejos
             db.client.table("movimiento_detalles").delete().eq("entrega_id", movimiento_id).execute()
             
-            # Insertar detalles nuevos
             for detalle in datos_detalles:
                 nuevo_detalle = {
                     'entrega_id': movimiento_id,
@@ -99,9 +91,7 @@ def guardar_movimiento(datos_cabecera, datos_detalles, movimiento_id=None):
                 db.client.table("movimiento_detalles").insert(nuevo_detalle).execute()
             
         else:
-            # NUEVO
             result = db.client.table("movimiento_general").insert(datos_cabecera).execute()
-            
             if not result.data:
                 return None
             
@@ -118,9 +108,7 @@ def guardar_movimiento(datos_cabecera, datos_detalles, movimiento_id=None):
                 }
                 db.client.table("movimiento_detalles").insert(nuevo_detalle).execute()
         
-        # Actualizar cache de stock
         StockCache.get_instance().actualizar_cache()
-        
         return movimiento_id
         
     except Exception as e:

@@ -3,16 +3,15 @@ from core.stock import StockCache
 
 
 def buscar_aceros(texto_busqueda):
-    """Busca aceros por código o descripción"""
+    """Busca aceros por código o descripción usando Supabase"""
     db = get_db()
     stock_cache = StockCache.get_instance()
     
     try:
-        # Buscar aceros usando Supabase
+        # Buscar en Supabase
         result = db.client.table("aceros").select("*").ilike("codigo", f"%{texto_busqueda}%").execute()
         
         if not result.data:
-            # Intentar buscar por descripción
             result = db.client.table("aceros").select("*").ilike("descripcion", f"%{texto_busqueda}%").execute()
         
         if not result.data:
@@ -40,7 +39,7 @@ def buscar_aceros(texto_busqueda):
 
 
 def obtener_opciones(campo):
-    """Obtiene opciones para filtros usando métodos de Supabase"""
+    """Obtiene opciones para filtros usando Supabase directamente"""
     db = get_db()
     
     try:
@@ -56,13 +55,13 @@ def obtener_opciones(campo):
         
         elif campo == 'ano':
             result = db.client.table("movimiento_general").select("ano").execute()
-            anos = [row['ano'] for row in result.data if row.get('ano')]
+            anos = [str(row['ano']) for row in result.data if row.get('ano')]
             anos = sorted(set(anos), reverse=True)
             if not anos:
                 import datetime
                 year = datetime.datetime.now().year
                 return [str(year), str(year-1), str(year-2)]
-            return [str(a) for a in anos]
+            return anos
         
         elif campo == 'estado':
             result = db.client.table("movimiento_general").select("estado").execute()
@@ -70,6 +69,7 @@ def obtener_opciones(campo):
             estados = sorted(set(estados))
             if "TRASLADO" not in estados:
                 estados.append("TRASLADO")
+                estados.sort()
             return estados
         
         elif campo == 'tipo_perforacion':
@@ -121,12 +121,9 @@ def obtener_actividades():
     """Obtiene diccionario de actividades {codigo: descripcion}"""
     db = get_db()
     try:
-        # Intentar con columna 'codigo'
         result = db.client.table("actividad").select("codigo, descripcion").execute()
-        
         if result.data:
             return {str(row['codigo']): row['descripcion'] for row in result.data if row.get('codigo')}
-        
         return {}
     except Exception as e:
         print(f"Error en obtener_actividades: {e}")
