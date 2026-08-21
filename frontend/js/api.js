@@ -1,5 +1,5 @@
 // Configuración de la API
-const API_URL = 'http://localhost:8000/api';
+const API_URL = '/api';
 
 // Funciones para Movimientos
 async function listarMovimientos(filtros = {}) {
