@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuevo Movimiento</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-top: 20px;
+        }
+
+        .form-card .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a2a3a;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eef1f4;
+        }
+
+        .detalle-row {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 1.5fr 0.8fr 1fr 0.5fr;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f2f5;
+        }
+
+        .detalle-row .form-control-sm {
+            padding: 5px 8px;
+            font-size: 13px;
+        }
+
+        .detalle-row .btn-eliminar {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .detalle-row .btn-eliminar:hover {
+            background: #c0392b;
+        }
+
+        .btn-agregar-detalle {
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .btn-agregar-detalle:hover {
+            background: #2980b9;
+        }
+
+        /* Modal buscador */
+        #modalBuscador {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #modalBuscador .modal-content {
+            background: white;
+            border-radius: 14px;
+            max-width: 700px;
+            width: 95%;
+            max-height: 90vh;
+            padding: 24px 28px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow-y: auto;
+        }
+
+        .resultado-acero {
+            display: grid;
+            grid-template-columns: 1fr 2fr 0.8fr 0.5fr;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eef1f4;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .resultado-acero:hover {
+            background: #f0f7ff;
+        }
+        .resultado-acero .codigo {
+            font-weight: 600;
+            color: #1a2a3a;
+        }
+        .resultado-acero .descripcion {
+            color: #2c3e50;
+        }
+        .resultado-acero .stock {
+            font-weight: 500;
+            text-align: center;
+        }
+        .resultado-acero .stock.bajo {
+            color: #e74c3c;
+        }
+        .resultado-acero .stock.normal {
+            color: #27ae60;
+        }
+
+        .btn-seleccionar-acero {
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .btn-seleccionar-acero:hover {
+            background: #1e8449;
+        }
+
+        .sin-stock-msg {
+            color: #e74c3c;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .detalle-row {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+                padding: 10px 0;
+            }
+            .detalle-row .btn-eliminar {
+                grid-column: span 2;
+            }
+            .resultado-acero {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+    NAVBAR
+    ============================================================ -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="../index.html" class="navbar-brand">
+                <span class="icon">📝</span>
+                <span id="tituloFormulario">Nuevo Movimiento</span>
+            </a>
+            <div class="navbar-actions">
+                <a href="listar.html" class="btn btn-outline-light">⬅ Volver</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ============================================================
+    CONTENIDO
+    ============================================================ -->
+    <div class="container">
+
+        <form id="formMovimiento" onsubmit="event.preventDefault(); guardarMovimiento();">
+
+            <!-- ============================================================
+            DATOS GENERALES
+            ============================================================ -->
+            <div class="form-card">
+                <div class="card-title">📋 Información General</div>
+
+                <div class="form-row" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="form-group">
+                        <label>Fecha *</label>
+                        <input type="date" id="fecha" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Año *</label>
+                        <input type="number" id="ano" class="form-control" required min="2000" max="2100">
+                    </div>
+                    <div class="form-group">
+                        <label>Mes *</label>
+                        <select id="mes" class="form-select" required>
+                            <option value="ENERO">ENERO</option>
+                            <option value="FEBRERO">FEBRERO</option>
+                            <option value="MARZO">MARZO</option>
+                            <option value="ABRIL">ABRIL</option>
+                            <option value="MAYO">MAYO</option>
+                            <option value="JUNIO">JUNIO</option>
+                            <option value="JULIO">JULIO</option>
+                            <option value="AGOSTO">AGOSTO</option>
+                            <option value="SEPTIEMBRE">SEPTIEMBRE</option>
+                            <option value="OCTUBRE">OCTUBRE</option>
+                            <option value="NOVIEMBRE">NOVIEMBRE</option>
+                            <option value="DICIEMBRE">DICIEMBRE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Turno</label>
+                        <select id="turno" class="form-select">
+                            <option value="">Seleccionar</option>
+                            <option value="DIA">DIA</option>
+                            <option value="NOCHE">NOCHE</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row" style="grid-template-columns: repeat(3, 1fr); margin-top:12px;">
+                    <div class="form-group">
+                        <label>Guía *</label>
+                        <input type="text" id="guia" class="form-control" required placeholder="Número de guía">
+                    </div>
+                    <div class="form-group">
+                        <label>Movimiento *</label>
+                        <select id="movimiento" class="form-select" required onchange="toggleCamposSalida()">
+                            <option value="INGRESO">INGRESO</option>
+                            <option value="SALIDA">SALIDA</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado</label>
+                        <select id="estado" class="form-select">
+                            <option value="">Seleccionar</option>
+                            <option value="CPM">CPM</option>
+                            <option value="VENTA">VENTA</option>
+                            <option value="AFILADORAS">AFILADORAS</option>
+                            <option value="TRASLADO">TRASLADO</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Campos de Salida (se muestran solo cuando movimiento=SALIDA) -->
+                <!-- Campos de Salida (se muestran solo cuando movimiento=SALIDA) -->
+                <div id="camposSalida" style="display:none; margin-top:12px; border-top:1px dashed #eef1f4; padding-top:12px;">
+                    <div class="form-row" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="form-group">
+                            <label>Operador</label>
+                            <select id="operador" class="form-select" onchange="actualizarGuardia()">
+                                <option value="">Seleccionar operador</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Equipo</label>
+                            <select id="equipo" class="form-select" onchange="actualizarCompania()">
+                                <option value="">Seleccionar equipo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Guardia</label>
+                            <input type="text" id="guardia" class="form-control" placeholder="Guardia">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px;">
+                        <label>Compañía</label>
+                        <input type="text" id="compania" class="form-control" placeholder="Compañía">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============================================================
+            DETALLES
+            ============================================================ -->
+            <div class="form-card">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    📋 Detalles
+                    <button type="button" class="btn-agregar-detalle" onclick="agregarDetalle()">➕ Agregar Fila</button>
+                </div>
+
+                <div id="detallesContainer">
+                    <!-- Los detalles se agregan aquí con JavaScript -->
+                </div>
+
+                <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="btn-agregar-detalle" onclick="agregarDetalle()">➕ Agregar Fila</button>
+                    <button type="button" class="btn-agregar-detalle" style="background:#6c757d;" onclick="abrirBuscador()">🔍 Buscar Acero</button>
+                </div>
+            </div>
+
+            <!-- ============================================================
+            BOTONES
+            ============================================================ -->
+            <div style="display:flex; gap:12px; margin-top:20px; padding-bottom:30px;">
+                <button type="submit" class="btn btn-success" style="padding:10px 32px;">💾 Guardar</button>
+                <a href="listar.html" class="btn btn-secondary" style="padding:10px 24px;">❌ Cancelar</a>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- ============================================================
+    MODAL BUSCADOR DE ACEROS
+    ============================================================ -->
+    <div id="modalBuscador">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h5 style="font-size:18px; margin:0;">🔍 Buscar Acero</h5>
+                <button onclick="cerrarBuscador()" style="background:none; border:none; font-size:24px; cursor:pointer;">✕</button>
+            </div>
+
+            <div style="margin-bottom:12px;">
+                <input type="text" id="busquedaAcero" class="form-control" placeholder="Buscar por código o descripción..." oninput="buscarAceros()">
+                <div style="margin-top:6px; font-size:13px; color:#6b7a8a;" id="infoStockMsg"></div>
+            </div>
+
+            <div id="resultadosAceros" style="max-height:400px; overflow-y:auto;">
+                <div class="text-center text-muted" style="padding:20px;">Escribe para buscar aceros</div>
+            </div>
+
+            <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+                <button onclick="cerrarBuscador()" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    SCRIPTS
+    ============================================================ -->
+    <script src="../js/api.js"></script>
+    <script>
+
+        // ============================================================
+        // VARIABLES GLOBALES
+        // ============================================================
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        let detalles = [];
+
+        // ============================================================
+        // INICIALIZAR
+        // ============================================================
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarOperadoresYEquipos(); 
+            if (id) {
+                document.getElementById('tituloFormulario').textContent = '✏️ Editar Movimiento';
+                cargarDatos(id);
+            } else {
+                // Valores por defecto
+                const hoy = new Date().toISOString().split('T')[0];
+                document.getElementById('fecha').value = hoy;
+                document.getElementById('ano').value = new Date().getFullYear();
+                agregarDetalle();
+            }
+
+            toggleCamposSalida();
+        });
+
+        // ============================================================
+        // TOGGLE CAMPOS SALIDA
+        // ============================================================
+
+        function toggleCamposSalida() {
+            const movimiento = document.getElementById('movimiento').value;
+            const campos = document.getElementById('camposSalida');
+            campos.style.display = movimiento === 'SALIDA' ? 'block' : 'none';
+        }
+
+        // ============================================================
+        // GESTIÓN DE DETALLES
+        // ============================================================
+
+        function agregarDetalle(datos = null) {
+            const container = document.getElementById('detallesContainer');
+            const row = document.createElement('div');
+            row.className = 'detalle-row';
+
+            row.innerHTML = `
+                <select class="form-select form-select-sm brazo-select">
+                    <option value="">Brazo</option>
+                    <option value="BRAZO 1" ${datos && datos.brazo === 'BRAZO 1' ? 'selected' : ''}>BRAZO 1</option>
+                    <option value="BRAZO 2" ${datos && datos.brazo === 'BRAZO 2' ? 'selected' : ''}>BRAZO 2</option>
+                </select>
+                <input type="text" class="form-control form-control-sm codigo-input" placeholder="Código" value="${datos ? datos.codigo : ''}">
+                <input type="text" class="form-control form-control-sm descripcion-input" placeholder="Descripción" value="${datos ? datos.descripcion : ''}">
+                <input type="number" class="form-control form-control-sm cantidad-input" placeholder="Cantidad" step="0.5" min="0" value="${datos ? datos.cantidad : ''}">
+                <input type="text" class="form-control form-control-sm motivo-input" placeholder="Motivo" value="${datos ? datos.motivo : ''}">
+                <button type="button" class="btn-eliminar" onclick="eliminarDetalle(this)">🗑️</button>
+            `;
+
+            container.appendChild(row);
+        }
+
+        function eliminarDetalle(btn) {
+            const container = document.getElementById('detallesContainer');
+            if (container.children.length > 1) {
+                btn.closest('.detalle-row').remove();
+            } else {
+                mostrarNotificacion('⚠️ Debe haber al menos un detalle', 'warning');
+            }
+        }
+
+        function obtenerDetalles() {
+            const rows = document.querySelectorAll('#detallesContainer .detalle-row');
+            const detalles = [];
+            rows.forEach(row => {
+                const codigo = row.querySelector('.codigo-input').value.trim();
+                const descripcion = row.querySelector('.descripcion-input').value.trim();
+                const cantidad = parseFloat(row.querySelector('.cantidad-input').value);
+                const motivo = row.querySelector('.motivo-input').value.trim();
+                const brazo = row.querySelector('.brazo-select').value;
+
+                if (codigo && cantidad > 0) {
+                    detalles.push({
+                        brazo: brazo,
+                        codigo: codigo,
+                        descripcion: descripcion,
+                        cantidad: cantidad,
+                        razon: motivo
+                    });
+                }
+            });
+            return detalles;
+        }
+
+        // ============================================================
+        // CARGAR DATOS PARA EDICIÓN
+        // ============================================================
+
+        async function cargarDatos(id) {
+            try {
+                const data = await obtenerMovimiento(id);
+
+                document.getElementById('fecha').value = data.fecha;
+                document.getElementById('ano').value = data.ano;
+                document.getElementById('mes').value = data.mes;
+                document.getElementById('turno').value = data.turno || '';
+                document.getElementById('guia').value = data.guia || '';
+                document.getElementById('movimiento').value = data.movimiento || 'INGRESO';
+                document.getElementById('estado').value = data.estado || '';
+                document.getElementById('operador').value = data.operador || '';
+                document.getElementById('equipo').value = data.equipo || '';
+                document.getElementById('guardia').value = data.guardia || '';
+                document.getElementById('compania').value = data.compania || '';
+
+                toggleCamposSalida();
+
+                // Cargar detalles
+                if (data.detalles && data.detalles.length > 0) {
+                    const container = document.getElementById('detallesContainer');
+                    container.innerHTML = '';
+                    data.detalles.forEach(d => {
+                        agregarDetalle(d);
+                    });
+                } else {
+                    agregarDetalle();
+                }
+
+            } catch (error) {
+                console.error('Error al cargar:', error);
+                mostrarNotificacion('❌ Error al cargar los datos', 'danger');
+            }
+        }
+
+        // ============================================================
+        // GUARDAR MOVIMIENTO
+        // ============================================================
+
+        async function guardarMovimiento() {
+            // Validar campos obligatorios
+            const fecha = document.getElementById('fecha').value;
+            const ano = document.getElementById('ano').value;
+            const guia = document.getElementById('guia').value.trim();
+            const movimiento = document.getElementById('movimiento').value;
+
+            if (!fecha || !ano || !guia) {
+                mostrarNotificacion('⚠️ Fecha, Año y Guía son obligatorios', 'warning');
+                return;
+            }
+
+            const detalles = obtenerDetalles();
+            if (detalles.length === 0) {
+                mostrarNotificacion('⚠️ Debe agregar al menos un detalle válido', 'warning');
+                return;
+            }
+
+            const data = {
+                fecha: fecha,
+                mes: document.getElementById('mes').value,
+                ano: parseInt(ano),
+                turno: document.getElementById('turno').value,
+                guia: guia,
+                movimiento: movimiento,
+                estado: document.getElementById('estado').value,
+                operador: document.getElementById('operador').value.trim(),
+                equipo: document.getElementById('equipo').value.trim(),
+                guardia: document.getElementById('guardia').value.trim(),
+                compania: document.getElementById('compania').value.trim(),
+                detalles: detalles
+            };
+
+            try {
+                let result;
+                if (id) {
+                    result = await actualizarMovimiento(id, data);
+                } else {
+                    result = await crearMovimiento(data);
+                }
+
+                if (result && result.success) {
+                    mostrarNotificacion('✅ Movimiento guardado correctamente');
+                    setTimeout(() => {
+                        window.location.href = 'listar.html';
+                    }, 1500);
+                } else {
+                    mostrarNotificacion('❌ Error al guardar: ' + (result?.detail || 'Error desconocido'), 'danger');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarNotificacion('❌ Error al guardar', 'danger');
+            }
+        }
+
+        // ============================================================
+        // BUSCADOR DE ACEROS
+        // ============================================================
+
+        let acerosCache = [];
+
+        function abrirBuscador() {
+            const modal = document.getElementById('modalBuscador');
+            modal.style.display = 'flex';
+            document.getElementById('busquedaAcero').value = '';
+            document.getElementById('resultadosAceros').innerHTML = '<div class="text-center text-muted" style="padding:20px;">Escribe para buscar aceros</div>';
+            document.getElementById('infoStockMsg').textContent = '';
+            document.getElementById('busquedaAcero').focus();
+        }
+
+        function cerrarBuscador() {
+            document.getElementById('modalBuscador').style.display = 'none';
+        }
+
+        // Cerrar con ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                cerrarBuscador();
+            }
+        });
+
+        // Cerrar al hacer clic fuera
+        document.getElementById('modalBuscador').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarBuscador();
+            }
+        });
+
+        async function buscarAceros() {
+            const busqueda = document.getElementById('busquedaAcero').value.trim();
+            const movimiento = document.getElementById('movimiento').value;
+            const container = document.getElementById('resultadosAceros');
+            const msgContainer = document.getElementById('infoStockMsg');
+
+            if (!busqueda || busqueda.length < 2) {
+                container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Escribe al menos 2 caracteres</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Buscando...</div>';
+
+            try {
+                // Llamar a la API para buscar aceros
+                const response = await fetch(`http://localhost:8000/api/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`);
+                const aceros = await response.json();
+
+                acerosCache = aceros;
+
+                if (!aceros || aceros.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">No se encontraron aceros</div>';
+                    return;
+                }
+
+                // Mostrar mensaje de stock según movimiento
+                if (movimiento === 'SALIDA') {
+                    msgContainer.textContent = '🔴 Modo SALIDA: Solo se muestran aceros con stock disponible';
+                    msgContainer.style.color = '#e74c3c';
+                } else {
+                    msgContainer.textContent = '🟢 Modo INGRESO: Se muestran todos los aceros';
+                    msgContainer.style.color = '#27ae60';
+                }
+
+                let html = '';
+                aceros.forEach(a => {
+                    const stockClass = a.stock > 0 ? 'normal' : 'bajo';
+                    const stockText = movimiento === 'SALIDA' ? `Stock: ${a.stock}` : '';
+                    html += `
+                        <div class="resultado-acero" onclick="seleccionarAcero('${a.codigo}', '${a.descripcion}')">
+                            <span class="codigo">${a.codigo}</span>
+                            <span class="descripcion">${a.descripcion}</span>
+                            <span class="stock ${stockClass}">${stockText}</span>
+                            <button class="btn-seleccionar-acero">Seleccionar</button>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error buscando aceros:', error);
+                container.innerHTML = '<div class="text-center text-danger" style="padding:20px;">Error al buscar aceros</div>';
+            }
+        }
+    
+        // ============================================================
+        // CARGAR OPERADORES Y EQUIPOS
+        // ============================================================
+
+        let operadoresCache = [];
+        let equiposCache = [];
+
+        async function cargarOperadoresYEquipos() {
+            try {
+                // Cargar operadores
+                const responseOp = await fetch('http://localhost:8000/api/operadores');
+                operadoresCache = await responseOp.json();
+                console.log('Operadores:', operadoresCache);
+                
+                const operadorSelect = document.getElementById('operador');
+                if (operadorSelect) {
+                    operadorSelect.innerHTML = '<option value="">Seleccionar operador</option>';
+                    operadoresCache.forEach(op => {
+                        const option = document.createElement('option');
+                        option.value = op.nombre;
+                        option.textContent = op.nombre;
+                        operadorSelect.appendChild(option);
+                    });
+                }
+
+                // Cargar equipos
+                const responseEq = await fetch('http://localhost:8000/api/equipos');
+                equiposCache = await responseEq.json();
+                console.log('Equipos:', equiposCache);
+                
+                const equipoSelect = document.getElementById('equipo');
+                if (equipoSelect) {
+                    equipoSelect.innerHTML = '<option value="">Seleccionar equipo</option>';
+                    equiposCache.forEach(eq => {
+                        const option = document.createElement('option');
+                        option.value = eq.equipo;
+                        option.textContent = eq.equipo;
+                        equipoSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando operadores/equipos:', error);
+            }
+        }  
+
+
+        function seleccionarAcero(codigo, descripcion) {
+            // Buscar un detalle vacío para llenar
+            const rows = document.querySelectorAll('#detallesContainer .detalle-row');
+            let filaEncontrada = null;
+
+            for (let row of rows) {
+                const codigoInput = row.querySelector('.codigo-input');
+                const descripcionInput = row.querySelector('.descripcion-input');
+                const cantidadInput = row.querySelector('.cantidad-input');
+
+                if (!codigoInput.value.trim() && !descripcionInput.value.trim() && !cantidadInput.value) {
+                    filaEncontrada = row;
+                    break;
+                }
+            }
+
+            if (filaEncontrada) {
+                filaEncontrada.querySelector('.codigo-input').value = codigo;
+                filaEncontrada.querySelector('.descripcion-input').value = descripcion;
+                filaEncontrada.querySelector('.cantidad-input').focus();
+            } else {
+                // Crear nueva fila con los datos
+                agregarDetalle({ codigo: codigo, descripcion: descripcion, cantidad: 0 });
+                const rows2 = document.querySelectorAll('#detallesContainer .detalle-row');
+                const lastRow = rows2[rows2.length - 1];
+                lastRow.querySelector('.codigo-input').value = codigo;
+                lastRow.querySelector('.descripcion-input').value = descripcion;
+                lastRow.querySelector('.cantidad-input').focus();
+            }
+
+            cerrarBuscador();
+            mostrarNotificacion(`✅ Acero seleccionado: ${codigo} - ${descripcion}`);
+        }
+
+
+        // ============================================================
+        // ACTUALIZAR GUARDIA Y COMPAÑÍA
+        // ============================================================
+
+        function actualizarGuardia() {
+            const operadorSelect = document.getElementById('operador');
+            const guardiaInput = document.getElementById('guardia');
+            const operadorNombre = operadorSelect.value;
+            
+            if (!operadorNombre) {
+                guardiaInput.value = '';
+                return;
+            }
+            
+            const operador = operadoresCache.find(op => op.nombre === operadorNombre);
+            if (operador && operador.guardia) {
+                guardiaInput.value = operador.guardia;
+            } else {
+                guardiaInput.value = '';
+            }
+        }
+
+        function actualizarCompania() {
+            const equipoSelect = document.getElementById('equipo');
+            const companiaInput = document.getElementById('compania');
+            const equipoNombre = equipoSelect.value;
+            
+            if (!equipoNombre) {
+                companiaInput.value = '';
+                return;
+            }
+            
+            const equipo = equiposCache.find(eq => eq.equipo === equipoNombre);
+            if (equipo && equipo.compania) {
+                companiaInput.value = equipo.compania;
+            } else {
+                companiaInput.value = '';
+            }
+        }
+
+
+        // ============================================================
+        // NOTIFICACIONES
+        // ============================================================
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.style.zIndex = '9999';
+            alert.style.minWidth = '300px';
+            alert.role = 'alert';
+            alert.innerHTML = `${mensaje} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.prepend(alert);
+            setTimeout(() => alert.remove(), 4000);
+        }
+
+        // Sobrescribir la función de notificación de api.js
+        window.mostrarNotificacion = mostrarNotificacion;
+    </script>
+
+</body>
+</html>

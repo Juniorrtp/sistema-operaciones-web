@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliación de Stock</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+        }
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border: none;
+        }
+        .card-header {
+            background: #1a2a3a;
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 10px 16px;
+            font-weight: 600;
+        }
+        .table thead th {
+            background: #f8f9fa;
+            color: #1a2a3a;
+            font-weight: 600;
+            border-bottom: 2px solid #1a2a3a;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-size: 10px;
+            text-align: center;
+            padding: 4px 2px;
+            white-space: nowrap;
+        }
+        .table td {
+            text-align: center;
+            vertical-align: middle;
+            padding: 2px 1px;
+            font-size: 11px;
+        }
+        .table .producto-nombre {
+            text-align: left;
+            font-weight: 500;
+            font-size: 11px;
+        }
+        .table .producto-codigo {
+            font-weight: 600;
+            font-size: 11px;
+            color: #1a5276;
+        }
+        .stock-cantidad {
+            font-weight: 700;
+            color: #1a5276;
+        }
+        .stock-input {
+            width: 50px;
+            text-align: center;
+            padding: 1px 1px;
+            border: 1px solid #d5d8dc;
+            border-radius: 3px;
+            font-size: 11px;
+            background: white;
+            transition: all 0.2s;
+        }
+        .stock-input:focus {
+            border-color: #1a5276;
+            box-shadow: 0 0 0 2px rgba(26,82,118,0.15);
+            outline: none;
+            background: #f0f7ff;
+        }
+        .stock-input.sistema {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #1a5276;
+            cursor: not-allowed;
+        }
+        .stock-input.fisico {
+            background: white;
+        }
+        .stock-input.fisico:hover {
+            background: #f0f7ff;
+        }
+        .badge-estado {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-estado.ok {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-estado.falta {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .badge-estado.sobra {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .filtro-buscar {
+            border-radius: 8px;
+            padding: 6px 12px;
+            border: 1px solid #d5d8dc;
+            width: 100%;
+            font-size: 13px;
+        }
+        .filtro-buscar:focus {
+            border-color: #1a5276;
+            box-shadow: 0 0 0 3px rgba(26,82,118,0.15);
+            outline: none;
+        }
+        .table-wrapper {
+            max-height: 500px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        .table-wrapper table {
+            min-width: 1400px;
+        }
+        .btn-primary { background: #1a5276; border: none; }
+        .btn-primary:hover { background: #1a2a3a; }
+        .btn-success { background: #1e8449; border: none; }
+        .btn-success:hover { background: #145a32; }
+        .btn-warning { background: #f39c12; border: none; color: white; }
+        .btn-warning:hover { background: #d68910; }
+        .resumen-card {
+            background: white;
+            border-radius: 10px;
+            padding: 8px 12px;
+            text-align: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            border-left: 4px solid #1a5276;
+            height: 100%;
+            min-width: 110px;
+        }
+        .resumen-card .numero {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a2a3a;
+        }
+        .resumen-card .label {
+            font-size: 9px;
+            color: #6b7a8a;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .resumen-card:nth-child(2) { border-left-color: #27ae60; }
+        .resumen-card:nth-child(3) { border-left-color: #f39c12; }
+        .resumen-card:nth-child(4) { border-left-color: #e74c3c; }
+        .resumen-card:nth-child(5) { border-left-color: #8e44ad; }
+        .total-row td {
+            background: #e8f0fe !important;
+            font-weight: 700 !important;
+            border-top: 2px solid #1a2a3a !important;
+        }
+        .total-row .stock-cantidad {
+            color: #1a2a3a !important;
+            font-size: 13px !important;
+        }
+        .leyenda {
+            font-size: 10px;
+            color: #6b7a8a;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 6px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin: 6px 12px;
+        }
+        .leyenda span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .leyenda .color-box {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid #d5d8dc;
+            display: inline-block;
+        }
+        .color-box.sistema { background: #d4e4f7; }
+        .color-box.fisico { background: white; }
+        #resumenContainer {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        @media (max-width: 768px) {
+            .stock-input { width: 38px; font-size: 10px; padding: 1px; }
+            .table td { padding: 1px; font-size: 10px; }
+            .table thead th { font-size: 8px; padding: 2px 1px; }
+            .resumen-card .numero { font-size: 14px; }
+            .resumen-card { padding: 4px 8px; min-width: 80px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- Título -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>📦 Conciliación de Stock</h2>
+            <a href="../index.html" class="btn btn-secondary btn-sm">🏠 Inicio</a>
+        </div>
+
+        <!-- Filtros -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">🔍 Buscar</label>
+                        <input type="text" id="buscarInput" class="filtro-buscar" placeholder="Código o descripción..." oninput="filtrarStock()">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">📅 Fecha Conteo</label>
+                        <input type="date" id="fechaInput" class="form-control">
+                    </div>
+                    <div class="col-md-6 d-flex gap-2">
+                        <button class="btn btn-primary" onclick="cargarStock()">🔄 Cargar</button>
+                        <button class="btn btn-success" onclick="guardarConteo()">💾 Guardar</button>
+                        <button class="btn btn-warning" onclick="cargarConteoFecha()">📥 Cargar Conteo</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumen -->
+        <div id="resumenContainer">
+            <div class="resumen-card">
+                <div class="numero" id="totalProductos">0</div>
+                <div class="label">📦 Productos</div>
+            </div>
+            <div class="resumen-card">
+                <div class="numero" id="totalStockSistema">0</div>
+                <div class="label">📊 Stock Sistema</div>
+            </div>
+            <div class="resumen-card">
+                <div class="numero" id="totalStockFisico">0</div>
+                <div class="label">📝 Stock Físico</div>
+            </div>
+            <div class="resumen-card">
+                <div class="numero" id="totalDiferencia">0</div>
+                <div class="label">📊 Diferencia</div>
+            </div>
+            <div class="resumen-card" style="border-left-color: #8e44ad;">
+                <div class="numero" id="totalProductosConteo">0</div>
+                <div class="label">📋 Conteo Guardado</div>
+            </div>
+        </div>
+
+        <!-- Tabla -->
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>📋 Stock por Producto y Ubicación</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="leyenda">
+                    <span><span class="color-box sistema"></span> Stock Sistema (referencia)</span>
+                    <span><span class="color-box fisico"></span> Stock Físico (editable)</span>
+                    <span>✅ OK = 0</span>
+                    <span>🔴 Positivo = FALTA</span>
+                    <span>🟠 Negativo = SOBRA</span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table table-hover mb-0" id="tablaStock">
+                        <thead>
+                            <tr>
+                                <th style="min-width:80px; text-align:left;">Código</th>
+                                <th style="min-width:140px; text-align:left;">Descripción</th>
+                                <th style="min-width:55px; text-align:center; background:#d4e4f7;">Sistema</th>
+                                <th style="min-width:55px; text-align:center; background:white;">TALLER</th>
+                                <th style="min-width:55px; text-align:center; background:white;">CAMIONETA</th>
+                                <th style="min-width:55px; text-align:center; background:white;">T.AFILADO</th>
+                                <th style="min-width:55px; text-align:center; background:white;">NV_120</th>
+                                <th style="min-width:55px; text-align:center; background:white;">JIMENA</th>
+                                <th style="min-width:55px; text-align:center; background:white;">RP-617</th>
+                                <th style="min-width:55px; text-align:center; background:white;">NV_1370</th>
+                                <th style="min-width:55px; text-align:center; background:white;">RP-616</th>
+                                <th style="min-width:55px; text-align:center; background:#fff3cd;">Dif.</th>
+                                <th style="min-width:60px; text-align:center;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaBody">
+                            <tr>
+                                <td colspan="13" class="text-center text-muted py-4">
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    Cargando datos...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        console.log('🚀 Página iniciada');
+
+        const UBICACIONES = ['TALLER', 'CAMIONETA', 'T.AFILADO', 'NV_120', 'JIMENA', 'RP-617', 'NV_1370', 'RP-616'];
+        let stockData = [];
+        let stockSistema = {};
+        let conteoFisico = {};
+
+        // ============================================================
+        // INICIALIZAR
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('fechaInput').value = hoy;
+            cargarStock();
+        });
+
+        // ============================================================
+        // CARGAR STOCK
+        // ============================================================
+        async function cargarStock() {
+            console.log('📡 Cargando stock...');
+            document.getElementById('tablaBody').innerHTML = `
+                <tr><td colspan="13" class="text-center text-muted py-4">
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    Cargando...
+                </td></tr>
+            `;
+
+            try {
+                // 🔥 1. Cargar stock del sistema (suma de cantidades)
+                const stockRes = await fetch('http://localhost:8000/api/stock');
+                const stock = await stockRes.json();
+
+                stockSistema = {};
+                stock.forEach(item => {
+                    stockSistema[item.codigo] = item.stock || 0;
+                });
+
+                // 🔥 2. Cargar descripciones DESDE movimiento_detalles (directo)
+                const detallesRes = await fetch('http://localhost:8000/api/detalles-movimientos');
+                const detallesData = await detallesRes.json();
+                
+                const descripciones = {};
+                if (detallesData && detallesData.length > 0) {
+                    detallesData.forEach(d => {
+                        if (d.codigo && d.descripcion) {
+                            descripciones[d.codigo] = d.descripcion;
+                        }
+                    });
+                }
+                
+                console.log('📦 Descripciones desde movimiento_detalles:', Object.keys(descripciones).length);
+
+                // 🔥 3. Construir datos de stock
+                stockData = [];
+                for (const [codigo, stockVal] of Object.entries(stockSistema)) {
+                    if (stockVal > 0) {
+                        stockData.push({
+                            codigo: codigo,
+                            descripcion: descripciones[codigo] || codigo,
+                            stock_sistema: stockVal,
+                            stock_fisico: 0,
+                            diferencia: stockVal,
+                            ubicaciones: {}
+                        });
+                    }
+                }
+
+                stockData.sort((a, b) => b.stock_sistema - a.stock_sistema);
+
+                console.log('📦 Datos cargados:', stockData.length);
+                mostrarTabla(stockData);
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                document.getElementById('tablaBody').innerHTML = `
+                    <tr><td colspan="13" class="text-center text-danger py-4">
+                        ❌ Error al cargar: ${error.message}
+                    </td></tr>
+                `;
+            }
+        }
+        
+
+
+        // ============================================================
+        // MOSTRAR TABLA (DOBLE ENTRADA)
+        // ============================================================
+        function mostrarTabla(productos) {
+            const tbody = document.getElementById('tablaBody');
+
+            if (!productos || productos.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="13" class="text-center text-muted py-4">
+                        No hay productos con stock
+                    </td></tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            let totalSistema = 0;
+            let totalFisico = 0;
+            let totalDiferencia = 0;
+            let totalPorUbic = {};
+
+            UBICACIONES.forEach(u => totalPorUbic[u] = 0);
+
+            productos.forEach(p => {
+                const codigo = p.codigo;
+                const sistema = p.stock_sistema || 0;
+                let fisicoTotal = 0;
+                let ubicacionesHtml = '';
+
+                UBICACIONES.forEach(ubic => {
+                    const key = `${codigo}_${ubic}`;
+                    const valor = conteoFisico[key] !== undefined ? conteoFisico[key] : 0;
+                    fisicoTotal += valor;
+                    totalPorUbic[ubic] += valor;
+                    
+                    ubicacionesHtml += `
+                        <td>
+                            <input type="number" class="stock-input fisico" 
+                                   value="${valor}" 
+                                   min="0" step="1"
+                                   data-codigo="${codigo}"
+                                   data-ubicacion="${ubic}"
+                                   onchange="actualizarFisico(this)">
+                        </td>
+                    `;
+                });
+
+                const diferencia = sistema - fisicoTotal;
+                totalSistema += sistema;
+                totalFisico += fisicoTotal;
+                totalDiferencia += diferencia;
+
+                // Determinar estado
+                let estado = '';
+                let badgeClass = '';
+                if (diferencia === 0) {
+                    estado = '✅ OK';
+                    badgeClass = 'ok';
+                } else if (diferencia > 0) {
+                    estado = `❌ FALTA ${diferencia}`;
+                    badgeClass = 'falta';
+                } else {
+                    estado = `⚠️ SOBRA ${Math.abs(diferencia)}`;
+                    badgeClass = 'sobra';
+                }
+
+                // Color de diferencia
+                let diffColor = '';
+                let diffText = '';
+                if (diferencia === 0) {
+                    diffColor = 'color: #27ae60; font-weight:700;';
+                    diffText = '0';
+                } else if (diferencia > 0) {
+                    diffColor = 'color: #e74c3c; font-weight:700;';
+                    diffText = `+${diferencia}`;
+                } else {
+                    diffColor = 'color: #f39c12; font-weight:700;';
+                    diffText = `${diferencia}`;
+                }
+
+                html += `
+                    <tr>
+                        <td class="producto-codigo">${codigo}</td>
+                        <td class="producto-nombre">${p.descripcion}</td>
+                        <td><strong class="stock-cantidad">${sistema}</strong></td>
+                        ${ubicacionesHtml}
+                        <td style="${diffColor}">${diffText}</td>
+                        <td><span class="badge-estado ${badgeClass}">${estado}</span></td>
+                    </tr>
+                `;
+            });
+
+            // Fila de totales
+            let totalesUbic = '';
+            UBICACIONES.forEach(ubic => {
+                totalesUbic += `<td><strong>${totalPorUbic[ubic]}</strong></td>`;
+            });
+
+            let diffTotal = totalSistema - totalFisico;
+            let diffTotalColor = diffTotal === 0 ? 'color:#27ae60;' : diffTotal > 0 ? 'color:#e74c3c;' : 'color:#f39c12;';
+
+            html += `
+                <tr class="total-row">
+                    <td colspan="2"><strong>TOTALES</strong></td>
+                    <td><strong>${totalSistema}</strong></td>
+                    ${totalesUbic}
+                    <td style="${diffTotalColor} font-weight:700;">
+                        ${diffTotal === 0 ? '0' : diffTotal > 0 ? `+${diffTotal}` : diffTotal}
+                    </td>
+                    <td></td>
+                </tr>
+            `;
+
+            tbody.innerHTML = html;
+            actualizarResumen(productos);
+        }
+
+        // ============================================================
+        // ACTUALIZAR FÍSICO (cuando el usuario edita)
+        // ============================================================
+        function actualizarFisico(input) {
+            const codigo = input.dataset.codigo;
+            const ubicacion = input.dataset.ubicacion;
+            const valor = parseFloat(input.value) || 0;
+            
+            // Guardar en el objeto de conteo
+            const key = `${codigo}_${ubicacion}`;
+            conteoFisico[key] = valor;
+            
+            // Actualizar el producto correspondiente
+            const producto = stockData.find(p => p.codigo === codigo);
+            if (producto) {
+                // Recalcular total físico para este producto
+                let totalFisico = 0;
+                UBICACIONES.forEach(ubic => {
+                    const k = `${codigo}_${ubic}`;
+                    totalFisico += conteoFisico[k] || 0;
+                });
+                producto.stock_fisico = totalFisico;
+                
+                // Recalcular diferencia
+                const sistema = producto.stock_sistema || 0;
+                const diferencia = sistema - totalFisico;
+                producto.diferencia = diferencia;
+            }
+            
+            // Refrescar la tabla completa para mantener consistencia
+            mostrarTabla(stockData);
+        }
+
+        // ============================================================
+        // FILTRAR STOCK
+        // ============================================================
+        function filtrarStock() {
+            const buscar = document.getElementById('buscarInput').value.trim().toLowerCase();
+
+            if (!buscar) {
+                mostrarTabla(stockData);
+                return;
+            }
+
+            const filtrados = stockData.filter(p => 
+                p.codigo.toLowerCase().includes(buscar) || 
+                p.descripcion.toLowerCase().includes(buscar)
+            );
+            mostrarTabla(filtrados);
+        }
+
+        // ============================================================
+        // ACTUALIZAR RESUMEN
+        // ============================================================
+        function actualizarResumen(productos) {
+            const totalProductos = productos.length;
+            let totalSistema = 0;
+            let totalFisico = 0;
+            let totalDiferencia = 0;
+            let conteoGuardado = 0;
+
+            productos.forEach(p => {
+                const sistema = p.stock_sistema || 0;
+                const fisico = p.stock_fisico || 0;
+                totalSistema += sistema;
+                totalFisico += fisico;
+                totalDiferencia += (sistema - fisico);
+                if (fisico > 0) conteoGuardado++;
+            });
+
+            document.getElementById('totalProductos').textContent = totalProductos;
+            document.getElementById('totalStockSistema').textContent = totalSistema;
+            document.getElementById('totalStockFisico').textContent = totalFisico;
+            
+            const diffEl = document.getElementById('totalDiferencia');
+            if (totalDiferencia === 0) {
+                diffEl.textContent = '0';
+                diffEl.style.color = '#27ae60';
+            } else if (totalDiferencia > 0) {
+                diffEl.textContent = `+${totalDiferencia}`;
+                diffEl.style.color = '#e74c3c';
+            } else {
+                diffEl.textContent = `${totalDiferencia}`;
+                diffEl.style.color = '#f39c12';
+            }
+            
+            document.getElementById('totalProductosConteo').textContent = conteoGuardado;
+        }
+
+        // ============================================================
+        // GUARDAR CONTEO
+        // ============================================================
+        async function guardarConteo() {
+            const fecha = document.getElementById('fechaInput').value;
+            if (!fecha) {
+                alert('⚠️ Seleccione una fecha');
+                return;
+            }
+
+            const datos = [];
+            Object.keys(conteoFisico).forEach(key => {
+                const [codigo, ubicacion] = key.split('_');
+                const cantidad = conteoFisico[key] || 0;
+                if (cantidad > 0) {
+                    datos.push({ codigo, ubicacion, cantidad });
+                }
+            });
+
+            if (datos.length === 0) {
+                alert('⚠️ No hay datos para guardar');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8000/api/stock/conteo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fecha: fecha,
+                        datos: datos,
+                        usuario: 'admin'
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(`✅ Conteo guardado correctamente (${datos.length} registros)`);
+                } else {
+                    alert('❌ Error: ' + (result.message || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al guardar: ' + error.message);
+            }
+        }
+
+        // ============================================================
+        // CARGAR CONTEO POR FECHA
+        // ============================================================
+        async function cargarConteoFecha() {
+            const fecha = document.getElementById('fechaInput').value;
+            if (!fecha) {
+                alert('⚠️ Seleccione una fecha');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:8000/api/stock/conteo/fecha?fecha=${fecha}`);
+                const result = await response.json();
+
+                if (result.success && result.datos) {
+                    conteoFisico = {};
+                    result.datos.forEach(d => {
+                        const key = `${d.codigo}_${d.ubicacion}`;
+                        conteoFisico[key] = d.cantidad;
+                        const producto = stockData.find(p => p.codigo === d.codigo);
+                        if (producto) {
+                            producto.stock_fisico = (producto.stock_fisico || 0) + d.cantidad;
+                        }
+                    });
+                    mostrarTabla(stockData);
+                    alert(`✅ Conteo cargado: ${result.datos.length} registros`);
+                } else {
+                    alert('📭 No hay conteo guardado para esta fecha');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al cargar: ' + error.message);
+            }
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metros - Formulario</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+
+ 
+        /* ============================================================
+        ESTILOS DEL FORMULARIO - CELDAS MÁS ANGOSTAS
+        ============================================================ */
+        /* ============================================================
+   ESTILOS DEL FORMULARIO - CELDAS MÁS ANGOSTAS
+   ============================================================ */
+        .detalle-row {
+            display: grid;
+            grid-template-columns: 0.4fr 0.35fr 1.2fr 0.6fr 0.8fr 0.5fr 0.3fr 0.3fr 0.3fr 0.4fr 0.4fr 0.25fr;
+            gap: 2px;
+            align-items: center;
+            padding: 2px 0;
+            border-bottom: 1px solid #f0f2f5;
+            font-size: 10px;
+        }
+
+        /* 🔥 FORZAR que los inputs ocupen el ancho de su columna */
+        .detalle-row .form-control-sm,
+        .detalle-row .form-select-sm {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            padding: 2px 3px;
+            font-size: 10px;
+            height: 24px;
+            box-sizing: border-box;
+        }
+
+        .detalle-row input[type="number"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            padding: 2px 2px;
+            font-size: 10px;
+            height: 24px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .detalle-row select.form-select-sm {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            padding: 2px 2px;
+            font-size: 10px;
+            height: 24px;
+            box-sizing: border-box;
+        }
+
+        .detalle-row .form-control-sm:focus,
+        .detalle-row .form-select-sm:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.12);
+        }
+
+        .detalle-row .btn-eliminar {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 1px 3px;
+            font-size: 10px;
+            cursor: pointer;
+            width: 100%;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .detalle-row .btn-eliminar:hover {
+            background: #c0392b;
+        }
+
+        .btn-agregar-detalle {
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .btn-agregar-detalle:hover {
+            background: #2980b9;
+        }
+
+        /* Cabecera de la tabla de detalles */
+        .detalle-header {
+            display: grid;
+            grid-template-columns: 0.4fr 0.35fr 1.2fr 0.6fr 0.8fr 0.5fr 0.3fr 0.3fr 0.3fr 0.4fr 0.4fr 0.25fr;
+            gap: 2px;
+            padding: 2px 0;
+            font-weight: 600;
+            font-size: 7px;
+            text-transform: uppercase;
+            color: #6b7a8a;
+            border-bottom: 2px solid #eef1f4;
+            background: #f8f9fa;
+            border-radius: 3px;
+        }
+
+        .detalle-header span {
+            padding: 0 2px;
+            text-align: center;
+        }
+
+        .campo-calculado {
+            background: #f8f9fa;
+            font-weight: 500;
+            color: #1a5276;
+        }
+
+        .campo-solo-lectura {
+            background: #f8f9fa !important;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 1200px) {
+            .detalle-row {
+                grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+            }
+            .detalle-header {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .detalle-row {
+                grid-template-columns: 1fr 1fr;
+            }
+            .detalle-row .btn-eliminar {
+                grid-column: span 2;
+            }
+        }
+
+
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container">
+            <a href="../index.html" class="navbar-brand">
+                <span class="icon">📏</span>
+                <span id="tituloFormulario">Nuevo Registro de Metros</span>
+            </a>
+            <div class="navbar-actions">
+                <a href="listar.html" class="btn btn-outline-light">⬅ Volver</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <form id="formMetros" onsubmit="event.preventDefault(); guardarMetro();">
+
+            <!-- ============================================================
+            DATOS GENERALES
+            ============================================================ -->
+            <div class="form-card">
+                <div class="card-title">📋 Información General</div>
+
+                <!-- Fila 1: Fecha, Año, Mes, Turno, Semana -->
+                <div class="form-row" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="form-group">
+                        <label>Fecha *</label>
+                        <input type="date" id="fecha" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Año *</label>
+                        <input type="number" id="ano" class="form-control" required min="2000" max="2100">
+                    </div>
+                    <div class="form-group">
+                        <label>Mes *</label>
+                        <select id="mes" class="form-select" required>
+                            <option value="ENERO">ENERO</option>
+                            <option value="FEBRERO">FEBRERO</option>
+                            <option value="MARZO">MARZO</option>
+                            <option value="ABRIL">ABRIL</option>
+                            <option value="MAYO">MAYO</option>
+                            <option value="JUNIO">JUNIO</option>
+                            <option value="JULIO">JULIO</option>
+                            <option value="AGOSTO">AGOSTO</option>
+                            <option value="SEPTIEMBRE">SEPTIEMBRE</option>
+                            <option value="OCTUBRE">OCTUBRE</option>
+                            <option value="NOVIEMBRE">NOVIEMBRE</option>
+                            <option value="DICIEMBRE">DICIEMBRE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Turno</label>
+                        <select id="turno" class="form-select">
+                            <option value="">Seleccionar</option>
+                            <option value="DIA">DIA</option>
+                            <option value="NOCHE">NOCHE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Semana</label>
+                        <input type="number" id="semana" class="form-control" placeholder="N° Semana">
+                    </div>
+                </div>
+
+                <!-- Fila 2: Operador, Guardia, Equipo, Compañía -->
+                <div class="form-row" style="grid-template-columns: repeat(4, 1fr); margin-top:12px;">
+                    <div class="form-group">
+                        <label>Operador *</label>
+                        <select id="operador" class="form-select" required>
+                            <option value="">Seleccionar operador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Guardia</label>
+                        <input type="text" id="guardia" class="form-control" placeholder="Guardia" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Equipo *</label>
+                        <select id="equipo" class="form-select" required>
+                            <option value="">Seleccionar equipo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Compañía</label>
+                        <input type="text" id="compania" class="form-control" placeholder="Compañía" readonly>
+                    </div>
+                </div>
+
+                <!-- Fila 3: Tipo Perforación, Total MP (sin CECO) -->
+                <div class="form-row" style="grid-template-columns: repeat(2, 1fr); margin-top:12px;">
+                    <div class="form-group">
+                        <label>Tipo Perforación *</label>
+                        <input type="text" id="tipoPerforacion" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Total MP</label>
+                        <input type="text" id="totalMp" class="form-control" value="0.00" readonly style="font-weight:bold; color:#1a5276;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================
+            DETALLES
+            ============================================================ -->
+            <div class="form-card">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    📋 Detalles de Perforación
+                    <button type="button" class="btn-agregar-detalle" onclick="agregarDetalle()">➕ Agregar Fila</button>
+                </div>
+
+                <!-- Cabecera de la tabla -->
+                <div class="detalle-header">
+                    <span>Brazo</span>
+                    <span>Código</span>
+                    <span>Actividad</span>
+                    <span>Nivel</span>
+                    <span>Labor</span>
+                    <span>Tipo</span>
+                    <span>Tal</span>
+                    <span>Rim</span>
+                    <span>Long</span>
+                    <span>MP Prod</span>
+                    <span>MP Rim</span>
+                    <span></span>
+                </div>
+
+                <div id="detallesContainer">
+                    <!-- Los detalles se agregan aquí con JavaScript -->
+                </div>
+
+                <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="btn-agregar-detalle" onclick="agregarDetalle()">➕ Agregar Fila</button>
+                    <button type="button" class="btn-agregar-detalle" style="background:#6c757d;" onclick="copiarFila()">📋 Copiar Fila</button>
+                </div>
+            </div>
+
+            <!-- ============================================================
+            BOTONES
+            ============================================================ -->
+            <div style="display:flex; gap:12px; margin-top:20px; padding-bottom:30px;">
+                <button type="submit" class="btn btn-success" style="padding:10px 32px;">💾 Guardar</button>
+                <a href="listar.html" class="btn btn-secondary" style="padding:10px 24px;">❌ Cancelar</a>
+            </div>
+
+        </form>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        // ============================================================
+        // VARIABLES GLOBALES
+        // ============================================================
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+
+        let operadoresCache = [];
+        let equiposCache = [];
+        let actividadesCache = {};
+        let contadorDetalles = 0;
+
+        // ============================================================
+        // INICIALIZAR
+        // ============================================================
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Iniciando formulario...');
+            
+            Promise.all([
+                cargarOperadoresYEquipos(),
+                cargarActividades()
+            ]).then(() => {
+                console.log('✅ Todos los datos cargados');
+                
+                if (id) {
+                    document.getElementById('tituloFormulario').textContent = '✏️ Editar Metros';
+                    cargarDatos(id);
+                } else {
+                    const hoy = new Date().toISOString().split('T')[0];
+                    document.getElementById('fecha').value = hoy;
+                    document.getElementById('ano').value = new Date().getFullYear();
+                    agregarDetalle();
+                }
+            });
+            
+            configurarEventos();
+        });
+
+        // ============================================================
+        // CONFIGURAR EVENTOS
+        // ============================================================
+
+        function configurarEventos() {
+            // Cuando cambia el operador, actualizar guardia
+            document.getElementById('operador').addEventListener('change', function() {
+                const operador = this.value;
+                const guardiaInput = document.getElementById('guardia');
+                if (operador) {
+                    const op = operadoresCache.find(o => o.nombre === operador);
+                    guardiaInput.value = op ? op.guardia || '' : '';
+                } else {
+                    guardiaInput.value = '';
+                }
+            });
+
+            // Cuando cambia el equipo, actualizar compañía y tipo perforación
+            document.getElementById('equipo').addEventListener('change', function() {
+                const equipo = this.value;
+                const companiaInput = document.getElementById('compania');
+                const tipoInput = document.getElementById('tipoPerforacion');
+
+                console.log('Equipo seleccionado:', equipo);
+                console.log('Equipos cache:', equiposCache);
+
+                if (equipo) {
+                    const eq = equiposCache.find(e => e.equipo === equipo);
+                    console.log('Equipo encontrado:', eq);
+                    if (eq) {
+                        companiaInput.value = eq.compania || '';
+                        tipoInput.value = eq.tipo_perforacion || '';
+                        console.log('Tipo perforación actualizado:', eq.tipo_perforacion);
+                    } else {
+                        companiaInput.value = '';
+                        tipoInput.value = '';
+                    }
+                } else {
+                    companiaInput.value = '';
+                    tipoInput.value = '';
+                }
+            });
+        }
+
+        // ============================================================
+        // CARGAR OPERADORES Y EQUIPOS
+        // ============================================================
+
+        async function cargarOperadoresYEquipos() {
+            try {
+                // Cargar operadores
+                const responseOp = await fetch('http://localhost:8000/api/operadores');
+                operadoresCache = await responseOp.json();
+                const operadorSelect = document.getElementById('operador');
+                if (operadorSelect) {
+                    operadorSelect.innerHTML = '<option value="">Seleccionar operador</option>';
+                    operadoresCache.forEach(op => {
+                        const option = document.createElement('option');
+                        option.value = op.nombre;
+                        option.textContent = op.nombre;
+                        operadorSelect.appendChild(option);
+                    });
+                }
+
+                // Cargar equipos
+                const responseEq = await fetch('http://localhost:8000/api/equipos');
+                equiposCache = await responseEq.json();
+                console.log('🚜 Equipos cargados:', equiposCache.length);
+                console.log('📋 Primer equipo:', equiposCache[0]);  // 👈 Ver qué tiene
+                console.log('📋 Todos los equipos:', equiposCache);  // 👈 Ver todos
+
+
+
+                const equipoSelect = document.getElementById('equipo');
+                if (equipoSelect) {
+                    equipoSelect.innerHTML = '<option value="">Seleccionar equipo</option>';
+                    equiposCache.forEach(eq => {
+                        const option = document.createElement('option');
+                        option.value = eq.equipo;
+                        option.textContent = eq.equipo;
+                        equipoSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando operadores/equipos:', error);
+            }
+        }
+
+        // ============================================================
+        // CARGAR ACTIVIDADES
+        // ============================================================
+        
+        async function cargarActividades() {
+            try {
+                console.log('🔄 Cargando actividades...');
+                const response = await fetch('http://localhost:8000/api/actividades');
+                
+                if (!response.ok) {
+                    console.error('❌ Error cargando actividades:', response.status);
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('📋 Actividades recibidas:', data.length);
+                
+                actividadesCache = {};
+                if (Array.isArray(data) && data.length > 0) {
+                    data.forEach(a => {
+                        actividadesCache[a.codigo] = a.descripcion;
+                    });
+                    console.log('✅ Actividades cargadas:', Object.keys(actividadesCache).length);
+                }
+                
+                actualizarTodosLosSelects();
+                
+            } catch (error) {
+                console.error('❌ Error cargando actividades:', error);
+            }
+        }
+
+        // ============================================================
+        // AGREGAR DETALLE
+        // ============================================================
+
+        
+        function agregarDetalle(datos = null) {
+            const container = document.getElementById('detallesContainer');
+            const row = document.createElement('div');
+            row.className = 'detalle-row';
+
+            const brazo = datos ? datos.brazo || '' : '';
+            const cod_ac = datos ? datos.cod_ac || '' : '';
+            const actividad = datos ? datos.actividad || '' : '';
+            const nivel = datos ? datos.nivel_perf || '' : '';
+            const labor_perf = datos ? datos.labor_perf || '' : '';
+            const tipo_roca = datos ? datos.tipo_roca || '' : '';
+            const num_tal = datos ? datos.num_tal || 0 : 0;
+            const rimados = datos ? datos.rimados || 0 : 0;  // 🔥 Rimados ANTES de Longitud
+            const lon_perf = datos ? datos.lon_perf || 0 : 0;
+
+            const opcionesActividad = crearOpcionesActividad(cod_ac);
+
+            row.innerHTML = `
+                <select class="form-select form-select-sm brazo-select">
+                    <option value="">Brazo</option>
+                    <option value="BRAZO 1" ${brazo === 'BRAZO 1' ? 'selected' : ''}>BRAZO 1</option>
+                    <option value="BRAZO 2" ${brazo === 'BRAZO 2' ? 'selected' : ''}>BRAZO 2</option>
+                </select>
+                <select class="form-select form-select-sm codigo-select" onchange="actualizarActividad(this)">
+                    ${opcionesActividad}
+                </select>
+                <input type="text" class="form-control form-control-sm actividad-input campo-solo-lectura" value="${actividad}" readonly>
+                <input type="text" class="form-control form-control-sm nivel-input" value="${nivel}" placeholder="Nivel">
+                <input type="text" class="form-control form-control-sm labor-input" value="${labor_perf}" placeholder="Labor">
+                <select class="form-select form-select-sm tipo-roca-select">
+                    <option value="">Tipo</option>
+                    <option value="MINERAL" ${tipo_roca === 'MINERAL' ? 'selected' : ''}>MINERAL</option>
+                    <option value="DESMONTE" ${tipo_roca === 'DESMONTE' ? 'selected' : ''}>DESMONTE</option>
+                </select>
+                <input type="number" class="form-control form-control-sm taladros-input" value="${num_tal}" step="1" min="0" placeholder="Tal." oninput="calcularFila(this)">
+                <input type="number" class="form-control form-control-sm rimados-input" value="${rimados}" step="1" min="0" placeholder="Rim." oninput="calcularFila(this)">
+                <input type="number" class="form-control form-control-sm longitud-input" value="${lon_perf}" step="0.5" min="0" placeholder="Long." oninput="calcularFila(this)">
+                <input type="text" class="form-control form-control-sm mp-prod-input campo-solo-lectura" value="0.00" readonly>
+                <input type="text" class="form-control form-control-sm mp-rim-input campo-solo-lectura" value="0.00" readonly>
+                <button type="button" class="btn-eliminar" onclick="eliminarDetalle(this)">🗑️</button>
+            `;
+
+            container.appendChild(row);
+            calcularTodosMP();
+        }
+
+
+
+        function actualizarActividad(select) {
+            const row = select.closest('.detalle-row');
+            const actividadInput = row.querySelector('.actividad-input');
+            const codigo = select.value;
+            
+            if (codigo && actividadesCache[codigo]) {
+                actividadInput.value = actividadesCache[codigo];
+            } else {
+                actividadInput.value = '';
+            }
+        }
+
+
+        function actualizarTodosLosSelects() {
+            const selects = document.querySelectorAll('.codigo-select');
+            selects.forEach(select => {
+                const valorActual = select.value;
+                const opciones = crearOpcionesActividad(valorActual);
+                select.innerHTML = opciones;
+            });
+        }
+
+        function crearOpcionesActividad(codigoSeleccionado = '') {
+            let opciones = '<option value="">Seleccionar</option>';
+            const codigos = Object.keys(actividadesCache).sort();
+            for (const cod of codigos) {
+                const desc = actividadesCache[cod];
+                const selected = cod === codigoSeleccionado ? 'selected' : '';
+                opciones += `<option value="${cod}" ${selected}>${cod} - ${desc}</option>`;
+            }
+            return opciones;
+        }
+
+
+        // ============================================================
+        // CALCULAR MP POR FILA
+        // ============================================================
+
+        function calcularFila(input) {
+            const row = input.closest('.detalle-row');
+            const taladros = parseFloat(row.querySelector('.taladros-input').value) || 0;
+            const rimados = parseFloat(row.querySelector('.rimados-input').value) || 0;  // 🔥 Rimados
+            const longitud = parseFloat(row.querySelector('.longitud-input').value) || 0;
+
+            const mpProd = taladros * longitud * 0.3048;
+            const mpRim = rimados * longitud * 0.3048;
+
+            row.querySelector('.mp-prod-input').value = mpProd.toFixed(2);
+            row.querySelector('.mp-rim-input').value = mpRim.toFixed(2);
+
+            calcularTotalMP();
+        }
+
+        function calcularTodosMP() {
+            document.querySelectorAll('#detallesContainer .detalle-row').forEach(row => {
+                const taladros = parseFloat(row.querySelector('.taladros-input').value) || 0;
+                const rimados = parseFloat(row.querySelector('.rimados-input').value) || 0;
+                const longitud = parseFloat(row.querySelector('.longitud-input').value) || 0;
+
+                const mpProd = taladros * longitud * 0.3048;
+                const mpRim = rimados * longitud * 0.3048;
+
+                row.querySelector('.mp-prod-input').value = mpProd.toFixed(2);
+                row.querySelector('.mp-rim-input').value = mpRim.toFixed(2);
+            });
+            calcularTotalMP();
+        }
+
+
+        function calcularTodosMP() {
+            document.querySelectorAll('#detallesContainer .detalle-row').forEach(row => {
+                const taladros = parseFloat(row.querySelector('.taladros-input').value) || 0;
+                const longitud = parseFloat(row.querySelector('.longitud-input').value) || 0;
+                const rimados = parseFloat(row.querySelector('.rimados-input').value) || 0;
+
+                const mpProd = taladros * longitud * 0.3048;
+                const mpRim = rimados * longitud * 0.3048;
+
+                row.querySelector('.mp-prod-input').value = mpProd.toFixed(2);
+                row.querySelector('.mp-rim-input').value = mpRim.toFixed(2);
+            });
+            calcularTotalMP();
+        }
+
+        function calcularTotalMP() {
+            let total = 0;
+            document.querySelectorAll('#detallesContainer .detalle-row').forEach(row => {
+                const mpProd = parseFloat(row.querySelector('.mp-prod-input').value) || 0;
+                const mpRim = parseFloat(row.querySelector('.mp-rim-input').value) || 0;
+                total += mpProd + mpRim;
+            });
+            document.getElementById('totalMp').value = total.toFixed(2);
+        }
+
+        // ============================================================
+        // COPIAR FILA
+        // ============================================================
+
+        function copiarFila() {
+            const rows = document.querySelectorAll('#detallesContainer .detalle-row');
+            if (rows.length === 0) {
+                agregarDetalle();
+                return;
+            }
+
+            const lastRow = rows[rows.length - 1];
+            const datos = {
+                brazo: lastRow.querySelector('.brazo-select').value,
+                cod_ac: lastRow.querySelector('.codigo-select').value,
+                actividad: lastRow.querySelector('.actividad-input').value,
+                nivel_perf: lastRow.querySelector('.nivel-input').value,
+                labor_perf: lastRow.querySelector('.labor-input').value,
+                tipo_roca: lastRow.querySelector('.tipo-roca-select').value,
+                num_tal: parseFloat(lastRow.querySelector('.taladros-input').value) || 0,
+                rimados: parseFloat(lastRow.querySelector('.rimados-input').value) || 0,
+                lon_perf: parseFloat(lastRow.querySelector('.longitud-input').value) || 0,
+                mp_produccion: parseFloat(lastRow.querySelector('.mp-prod-input').value) || 0,
+                mp_rimado: parseFloat(lastRow.querySelector('.mp-rim-input').value) || 0
+            };
+
+            agregarDetalle(datos);
+        }
+
+
+        // ============================================================
+        // ELIMINAR DETALLE
+        // ============================================================
+
+        function eliminarDetalle(btn) {
+            const container = document.getElementById('detallesContainer');
+            if (container.children.length > 1) {
+                btn.closest('.detalle-row').remove();
+                calcularTotalMP();
+            } else {
+                mostrarNotificacion('⚠️ Debe haber al menos un detalle', 'warning');
+            }
+        }
+
+        // ============================================================
+        // OBTENER DETALLES
+        // ============================================================
+        function obtenerDetalles() {
+            const rows = document.querySelectorAll('#detallesContainer .detalle-row');
+            const detalles = [];
+            rows.forEach(row => {
+                const brazo = row.querySelector('.brazo-select').value;
+                const cod_ac = row.querySelector('.codigo-select').value;
+                const actividad = row.querySelector('.actividad-input').value;
+                const nivel_perf = row.querySelector('.nivel-input').value;
+                const labor_perf = row.querySelector('.labor-input').value;
+                const tipo_roca = row.querySelector('.tipo-roca-select').value;
+                const num_tal = parseFloat(row.querySelector('.taladros-input').value) || 0;
+                const rimados = parseFloat(row.querySelector('.rimados-input').value) || 0;
+                const lon_perf = parseFloat(row.querySelector('.longitud-input').value) || 0;
+                const mp_produccion = parseFloat(row.querySelector('.mp-prod-input').value) || 0;
+                const mp_rimado = parseFloat(row.querySelector('.mp-rim-input').value) || 0;
+
+                if (cod_ac && num_tal > 0) {
+                    detalles.push({
+                        brazo: brazo,
+                        cod_ac: cod_ac,
+                        actividad: actividad,
+                        nivel_perf: nivel_perf,
+                        labor_perf: labor_perf,
+                        tipo_roca: tipo_roca,
+                        num_tal: num_tal,
+                        rimados: rimados,
+                        lon_perf: lon_perf,
+                        mp_produccion: mp_produccion,
+                        mp_rimado: mp_rimado
+                    });
+                }
+            });
+            return detalles;
+        }
+        // ============================================================
+        // CARGAR DATOS PARA EDICIÓN
+        // ============================================================
+
+        async function cargarDatos(id) {
+            try {
+                const data = await obtenerMetro(id);
+                document.getElementById('fecha').value = data.fecha;
+                document.getElementById('ano').value = data.ano;
+                document.getElementById('mes').value = data.mes;
+                document.getElementById('turno').value = data.turno || '';
+                document.getElementById('semana').value = data.semana || '';
+
+                // Cargar operador y guardia
+                const op = operadoresCache.find(o => o.nombre === data.operador);
+                document.getElementById('operador').value = data.operador || '';
+                document.getElementById('guardia').value = op ? op.guardia || '' : '';
+
+                // Cargar equipo, compañía y tipo
+                const eq = equiposCache.find(e => e.equipo === data.equipo);
+                document.getElementById('equipo').value = data.equipo || '';
+                document.getElementById('compania').value = eq ? eq.compania || '' : '';
+                document.getElementById('tipoPerforacion').value = data.tipo_perforacion || '';
+
+                const container = document.getElementById('detallesContainer');
+                container.innerHTML = '';
+                if (data.detalles && data.detalles.length > 0) {
+                    data.detalles.forEach(d => {
+                        agregarDetalle({
+                            brazo: d.brazo,
+                            cod_ac: d.cod_ac,
+                            actividad: d.actividad,
+                            nivel_perf: d.nivel_perf,
+                            labor_perf: d.labor_perf,
+                            tipo_roca: d.tipo_roca,
+                            num_tal: d.num_tal,
+                            lon_perf: d.lon_perf,
+                            rimados: d.rimados,
+                            mp_produccion: d.mp_produccion,
+                            mp_rimado: d.mp_rimado
+                        });
+                    });
+                } else {
+                    agregarDetalle();
+                }
+
+                calcularTotalMP();
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarNotificacion('❌ Error al cargar los datos', 'danger');
+            }
+        }
+
+        // ============================================================
+        // GUARDAR METRO
+        // ============================================================
+
+        async function guardarMetro() {
+            const fecha = document.getElementById('fecha').value;
+            const ano = document.getElementById('ano').value;
+            const operador = document.getElementById('operador').value;
+            const equipo = document.getElementById('equipo').value;
+            const tipoPerforacion = document.getElementById('tipoPerforacion').value;
+
+            if (!fecha || !ano || !operador || !equipo || !tipoPerforacion) {
+                mostrarNotificacion('⚠️ Fecha, Año, Operador, Equipo y Tipo Perforación son obligatorios', 'warning');
+                return;
+            }
+
+            const detalles = obtenerDetalles();
+            if (detalles.length === 0) {
+                mostrarNotificacion('⚠️ Debe agregar al menos un detalle válido', 'warning');
+                return;
+            }
+
+            // Calcular total_mp de los detalles
+            let total_mp = 0;
+            detalles.forEach(d => {
+                total_mp += (d.mp_produccion || 0) + (d.mp_rimado || 0);
+            });
+
+            const data = {
+                fecha: fecha,
+                mes: document.getElementById('mes').value,
+                ano: parseInt(ano),
+                turno: document.getElementById('turno').value,
+                semana: document.getElementById('semana').value || '',
+                operador: operador,
+                guardia: document.getElementById('guardia').value || '',
+                equipo: equipo,
+                compania: document.getElementById('compania').value || '',
+                tipo_perforacion: tipoPerforacion,
+                total_mp: total_mp,
+                detalles: detalles
+            };
+
+            try {
+                let result;
+                if (id) {
+                    result = await actualizarMetro(id, data);
+                } else {
+                    result = await crearMetro(data);
+                }
+
+                if (result && result.success) {
+                    mostrarNotificacion('✅ Registro guardado correctamente');
+
+                    if (!id) {
+                        // Limpiar para nuevo registro (mantener fecha, mes, año, turno, semana)
+                        document.getElementById('operador').value = '';
+                        document.getElementById('guardia').value = '';
+                        document.getElementById('equipo').value = '';
+                        document.getElementById('compania').value = '';
+                        document.getElementById('tipoPerforacion').value = '';
+                        document.getElementById('totalMp').value = '0.00';
+                        const container = document.getElementById('detallesContainer');
+                        container.innerHTML = '';
+                        agregarDetalle();
+                        document.getElementById('operador').focus();
+                    } else {
+                        setTimeout(() => {
+                            window.location.href = 'listar.html';
+                        }, 1500);
+                    }
+                } else {
+                    mostrarNotificacion('❌ Error al guardar: ' + (result?.detail || 'Error desconocido'), 'danger');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarNotificacion('❌ Error al guardar', 'danger');
+            }
+        }
+
+        // ============================================================
+        // NOTIFICACIONES
+        // ============================================================
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.style.zIndex = '9999';
+            alert.style.minWidth = '300px';
+            alert.role = 'alert';
+            alert.innerHTML = `${mensaje} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.prepend(alert);
+            setTimeout(() => alert.remove(), 4000);
+        }
+    </script>
+
+</body>
+</html>

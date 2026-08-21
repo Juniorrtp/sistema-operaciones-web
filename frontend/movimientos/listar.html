@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movimientos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* Estilos específicos para los filtros */
+        .filtros-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 24px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-top: 20px;
+        }
+
+        .filtros-container .filtros-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filtros-container .filtros-header h5 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a2a3a;
+            margin: 0;
+        }
+
+        .filtros-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+        }
+
+        .filtros-grid .form-group {
+            margin-bottom: 0;
+        }
+
+        .filtros-grid .form-group label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #6b7a8a;
+            font-weight: 600;
+        }
+
+        .filtros-grid .form-control,
+        .filtros-grid .form-select {
+            font-size: 13px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            border: 1px solid #d5d8dc;
+            width: 100%;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .filtros-grid .form-control:focus,
+        .filtros-grid .form-select:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52,152,219,0.12);
+            outline: none;
+        }
+
+        .filtros-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #eef1f4;
+            flex-wrap: wrap;
+        }
+
+        .btn-filtrar {
+            background: #3498db;
+            color: white;
+            padding: 8px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-filtrar:hover {
+            background: #2980b9;
+        }
+
+        .btn-limpiar {
+            background: #e9ecef;
+            color: #4a5a6a;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-limpiar:hover {
+            background: #dee2e6;
+        }
+
+        .btn-exportar {
+            background: #27ae60;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-exportar:hover {
+            background: #1e8449;
+        }
+
+        .filtros-avanzados-toggle {
+            color: #3498db;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .filtros-avanzados-toggle:hover {
+            color: #1a5276;
+        }
+
+        .filtros-avanzados {
+            display: none;
+            margin-top: 12px;
+            padding-top: 14px;
+            border-top: 1px dashed #d5d8dc;
+        }
+
+        .filtros-avanzados.active {
+            display: block;
+        }
+
+        .filtros-avanzados-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .filtros-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .filtros-avanzados-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .filtros-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .filtros-avanzados-grid {
+                grid-template-columns: 1fr;
+            }
+            .filtros-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .filtros-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Modal personalizado */
+        #modalConfirmacion {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+    NAVBAR
+    ============================================================ -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="../index.html" class="navbar-brand">
+                <span class="icon">📋</span>
+                Movimientos
+            </a>
+            <div class="navbar-actions">
+                <a href="../index.html" class="btn btn-outline-light">🏠 Inicio</a>
+                <a href="formulario.html" class="btn btn-primary">➕ Nuevo</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ============================================================
+    CONTENIDO
+    ============================================================ -->
+    <div class="container">
+
+        <!-- ============================================================
+        FILTROS
+        ============================================================ -->
+        <div class="filtros-container">
+            <div class="filtros-header">
+                <h5>🔍 Filtros de Búsqueda</h5>
+                <a href="#" class="filtros-avanzados-toggle" onclick="toggleAvanzados(event)">
+                    ⚙️ Más filtros
+                </a>
+            </div>
+
+            <form id="formFiltros" onsubmit="event.preventDefault(); cargarMovimientos();">
+                <!-- Filtros principales -->
+                <div class="filtros-grid">
+                    <div class="form-group">
+                        <label>Fecha Desde</label>
+                        <input type="date" id="fechaDesde" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha Hasta</label>
+                        <input type="date" id="fechaHasta" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Año</label>
+                        <select id="filtroAno" class="form-select">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Mes</label>
+                        <select id="filtroMes" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="ENERO">ENERO</option>
+                            <option value="FEBRERO">FEBRERO</option>
+                            <option value="MARZO">MARZO</option>
+                            <option value="ABRIL">ABRIL</option>
+                            <option value="MAYO">MAYO</option>
+                            <option value="JUNIO">JUNIO</option>
+                            <option value="JULIO">JULIO</option>
+                            <option value="AGOSTO">AGOSTO</option>
+                            <option value="SEPTIEMBRE">SEPTIEMBRE</option>
+                            <option value="OCTUBRE">OCTUBRE</option>
+                            <option value="NOVIEMBRE">NOVIEMBRE</option>
+                            <option value="DICIEMBRE">DICIEMBRE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Movimiento</label>
+                        <select id="filtroMovimiento" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="INGRESO">INGRESO</option>
+                            <option value="SALIDA">SALIDA</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado</label>
+                        <select id="filtroEstado" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="CPM">CPM</option>
+                            <option value="VENTA">VENTA</option>
+                            <option value="AFILADORAS">AFILADORAS</option>
+                            <option value="TRASLADO">TRASLADO</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Filtros avanzados -->
+                <div class="filtros-avanzados" id="filtrosAvanzados">
+                    <div class="filtros-avanzados-grid">
+                        <div class="form-group">
+                            <label>Operador</label>
+                            <input type="text" id="filtroOperador" class="form-control" placeholder="Buscar operador...">
+                        </div>
+                        <div class="form-group">
+                            <label>Equipo</label>
+                            <input type="text" id="filtroEquipo" class="form-control" placeholder="Buscar equipo...">
+                        </div>
+                        <div class="form-group">
+                            <label>Guía</label>
+                            <input type="text" id="filtroGuia" class="form-control" placeholder="Número de guía...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Acciones -->
+                <div class="filtros-actions">
+                    <button type="submit" class="btn-filtrar">🔍 Filtrar</button>
+                    <button type="button" class="btn-limpiar" onclick="limpiarFiltros()">🧹 Limpiar</button>
+                    <button type="button" class="btn-exportar" onclick="exportarExcel()">📊 Exportar</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ============================================================
+        TABLA DE RESULTADOS
+        ============================================================ -->
+        <div class="table-container" style="margin-top: 24px;">
+            <div class="table-header">
+                <h4>📋 Lista de Movimientos</h4>
+                <div class="actions">
+                    <span id="contadorRegistros" style="font-size:14px; color:#6b7a8a;">0 registros</span>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table" id="tablaMovimientos">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha</th>
+                            <th>Mes</th>
+                            <th>Año</th>
+                            <th>Turno</th>
+                            <th>Guía</th>
+                            <th>Movimiento</th>
+                            <th>Operador</th>
+                            <th>Equipo</th>
+                            <th>Estado</th>
+                            <th style="width:100px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyMovimientos">
+                        <tr>
+                            <td colspan="11" class="text-center text-muted">Cargando datos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL CONFIRMAR ELIMINAR (CUSTOM)
+    ============================================================ -->
+    <div id="modalConfirmacion">
+        <div style="background:white; border-radius:14px; max-width:450px; width:90%; padding:28px 32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:modalFade 0.25s ease;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                <span style="font-size:28px;">⚠️</span>
+                <h5 style="font-size:18px; color:#1a2a3a; margin:0; font-weight:600;">Confirmar eliminación</h5>
+            </div>
+            <p style="font-size:15px; color:#2c3e50; margin-bottom:4px;">
+                ¿Estás seguro de eliminar este movimiento?
+            </p>
+            <p style="font-size:13px; color:#6b7a8a; margin-bottom:20px;">
+                Esta acción no se puede deshacer. Los detalles asociados también serán eliminados.
+            </p>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="cerrarModal()" style="background:#e9ecef; border:none; padding:8px 24px; border-radius:6px; font-size:14px; font-weight:500; color:#4a5a6a; cursor:pointer;">
+                    Cancelar
+                </button>
+                <button id="btnConfirmarEliminarCustom" style="background:#e74c3c; border:none; padding:8px 24px; border-radius:6px; font-size:14px; font-weight:500; color:white; cursor:pointer;">
+                    🗑️ Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    SCRIPTS
+    ============================================================ -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/api.js"></script>
+    <script>
+
+        let eliminarId = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarFiltros();
+            cargarMovimientos();
+        });
+
+        // ============================================================
+        // TOGGLE FILTROS AVANZADOS
+        // ============================================================
+        function toggleAvanzados(event) {
+            event.preventDefault();
+            const div = document.getElementById('filtrosAvanzados');
+            div.classList.toggle('active');
+            event.target.textContent = div.classList.contains('active') ? '⚙️ Menos filtros' : '⚙️ Más filtros';
+        }
+
+        // ============================================================
+        // CARGAR FILTROS (Años desde la API)
+        // ============================================================
+        async function cargarFiltros() {
+            try {
+                const movimientos = await listarMovimientos({ limit: 1000 });
+                const anos = [...new Set(movimientos.map(m => m.ano))].filter(a => a).sort((a,b) => b - a);
+                const selectAno = document.getElementById('filtroAno');
+                anos.forEach(ano => {
+                    const option = document.createElement('option');
+                    option.value = ano;
+                    option.textContent = ano;
+                    selectAno.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error cargando filtros:', error);
+            }
+        }
+
+        // ============================================================
+        // CARGAR MOVIMIENTOS
+        // ============================================================
+        async function cargarMovimientos() {
+            const desde = document.getElementById('fechaDesde').value;
+            const hasta = document.getElementById('fechaHasta').value;
+            const ano = document.getElementById('filtroAno').value;
+            const mes = document.getElementById('filtroMes').value;
+            const movimiento = document.getElementById('filtroMovimiento').value;
+            const estado = document.getElementById('filtroEstado').value;
+            const operador = document.getElementById('filtroOperador').value.trim();
+            const equipo = document.getElementById('filtroEquipo').value.trim();
+            const guia = document.getElementById('filtroGuia').value.trim();
+
+            const filtros = {};
+            if (desde) filtros.fecha_desde = desde;
+            if (hasta) filtros.fecha_hasta = hasta;
+            if (ano) filtros.ano = ano;
+            if (mes) filtros.mes = mes;
+            if (movimiento) filtros.movimiento = movimiento;
+            if (estado) filtros.estado = estado;
+            if (operador) filtros.operador = operador;
+            if (equipo) filtros.equipo = equipo;
+            if (guia) filtros.guia = guia;
+
+            try {
+                const data = await listarMovimientos(filtros);
+                mostrarTabla(data);
+                document.getElementById('contadorRegistros').textContent = `${data.length} registros`;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('tbodyMovimientos').innerHTML = `
+                    <tr><td colspan="11" class="text-center text-danger">❌ Error al cargar datos</td></tr>
+                `;
+            }
+        }
+
+        // ============================================================
+        // MOSTRAR TABLA
+        // ============================================================
+        function mostrarTabla(data) {
+            const tbody = document.getElementById('tbodyMovimientos');
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">No hay registros que coincidan con los filtros</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.map(row => `
+                <tr>
+                    <td><strong>${row.id}</strong></td>
+                    <td>${row.fecha}</td>
+                    <td>${row.mes || '-'}</td>
+                    <td>${row.ano || '-'}</td>
+                    <td>${row.turno || '-'}</td>
+                    <td>${row.guia || '-'}</td>
+                    <td>
+                        <span class="badge-status ${row.movimiento === 'INGRESO' ? 'success' : 'danger'}">
+                            ${row.movimiento || '-'}
+                        </span>
+                    </td>
+                    <td>${row.operador || '-'}</td>
+                    <td>${row.equipo || '-'}</td>
+                    <td>
+                        ${row.estado ? `<span class="badge-status info">${row.estado}</span>` : '-'}
+                    </td>
+                    <td>
+                        <a href="formulario.html?id=${row.id}" class="btn btn-warning btn-sm" title="Editar">✏️</a>
+                        <button class="btn btn-danger btn-sm" onclick="confirmarEliminar(${row.id})" title="Eliminar">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+
+        // ============================================================
+        // EXPORTAR A EXCEL
+        // ============================================================
+        async function exportarExcel() {
+            const desde = document.getElementById('fechaDesde').value;
+            const hasta = document.getElementById('fechaHasta').value;
+            
+            if (!desde || !hasta) {
+                mostrarNotificacion('⚠️ Seleccione un rango de fechas', 'warning');
+                return;
+            }
+            
+            try {
+                mostrarNotificacion('📊 Generando Excel...', 'info');
+                
+                // Usar fetch para descargar el archivo
+                const response = await fetch(`http://localhost:8000/api/exportar/excel?desde=${desde}&hasta=${hasta}&tipo=movimientos`);
+                
+                if (!response.ok) {
+                    throw new Error('Error al exportar');
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Movimientos_${desde}_${hasta}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                
+                mostrarNotificacion('✅ Excel descargado correctamente', 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarNotificacion('❌ Error al exportar: ' + error.message, 'danger');
+            }
+        }
+
+        // ============================================================
+        // LIMPIAR FILTROS
+        // ============================================================
+        function limpiarFiltros() {
+            document.getElementById('fechaDesde').value = '';
+            document.getElementById('fechaHasta').value = '';
+            document.getElementById('filtroAno').value = '';
+            document.getElementById('filtroMes').value = '';
+            document.getElementById('filtroMovimiento').value = '';
+            document.getElementById('filtroEstado').value = '';
+            document.getElementById('filtroOperador').value = '';
+            document.getElementById('filtroEquipo').value = '';
+            document.getElementById('filtroGuia').value = '';
+            document.getElementById('filtrosAvanzados').classList.remove('active');
+            document.querySelector('.filtros-avanzados-toggle').textContent = '⚙️ Más filtros';
+            cargarMovimientos();
+        }
+
+        // ============================================================
+        // ELIMINAR - CON MODAL CUSTOM
+        // ============================================================
+        function confirmarEliminar(id) {
+            eliminarId = id;
+            const modal = document.getElementById('modalConfirmacion');
+            modal.style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            const modal = document.getElementById('modalConfirmacion');
+            modal.style.display = 'none';
+            eliminarId = null;
+        }
+
+        document.getElementById('btnConfirmarEliminarCustom').addEventListener('click', async function() {
+            if (eliminarId) {
+                try {
+                    await eliminarMovimiento(eliminarId);
+                    mostrarNotificacion('✅ Movimiento eliminado correctamente');
+                    cargarMovimientos();
+                } catch (error) {
+                    mostrarNotificacion('❌ Error al eliminar', 'danger');
+                }
+                cerrarModal();
+            }
+        });
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('modalConfirmacion').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarModal();
+            }
+        });
+
+        // Cerrar modal con tecla ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                cerrarModal();
+            }
+        });
+
+
+        // ============================================================
+        // NOTIFICACIONES
+        // ============================================================
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.style.zIndex = '9999';
+            alert.style.minWidth = '300px';
+            alert.role = 'alert';
+            alert.innerHTML = `${mensaje} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.prepend(alert);
+            setTimeout(() => alert.remove(), 4000);
+        }
+
+        // Sobrescribir la función de notificación de api.js
+        window.mostrarNotificacion = mostrarNotificacion;
+    </script>
+
+</body>
+</html>

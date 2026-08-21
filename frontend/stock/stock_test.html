@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Stock</title>
+</head>
+<body>
+
+    <h1>📦 Test de Stock</h1>
+    <button onclick="cargar()">Cargar Datos</button>
+    <pre id="resultado">Esperando...</pre>
+
+    <script>
+        async function cargar() {
+            document.getElementById('resultado').textContent = 'Cargando...';
+            try {
+                const res = await fetch('http://localhost:8000/api/stock/matriz');
+                const data = await res.json();
+                document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                document.getElementById('resultado').textContent = 'Error: ' + e.message;
+            }
+        }
+    </script>
+
+</body>
+</html>
