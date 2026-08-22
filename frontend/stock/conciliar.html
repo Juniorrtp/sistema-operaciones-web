@@ -305,7 +305,7 @@
         </div>
 
     </div>
-
+    <script src="../js/api.js"></script>
     <script>
         console.log('🚀 Página iniciada');
 
@@ -337,7 +337,7 @@
 
             try {
                 // 🔥 1. Cargar stock del sistema (suma de cantidades)
-                const stockRes = await fetch('http://localhost:8000/api/stock');
+                const stockRes = await fetch(`${API_URL}/stock`);
                 const stock = await stockRes.json();
 
                 stockSistema = {};
@@ -346,7 +346,7 @@
                 });
 
                 // 🔥 2. Cargar descripciones DESDE movimiento_detalles (directo)
-                const detallesRes = await fetch('http://localhost:8000/api/detalles-movimientos');
+                const detallesRes = await fetch(`${API_URL}/detalles-movimientos`);
                 const detallesData = await detallesRes.json();
                 
                 const descripciones = {};
@@ -623,7 +623,7 @@
             }
 
             try {
-                const response = await fetch('http://localhost:8000/api/stock/conteo', {
+                const response = await fetch(`${API_URL}/stock/conteo`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -656,7 +656,7 @@
             }
 
             try {
-                const response = await fetch(`http://localhost:8000/api/stock/conteo/fecha?fecha=${fecha}`);
+                const response = await fetch(`${API_URL}/stock/conteo/fecha?fecha=${fecha}`);
                 const result = await response.json();
 
                 if (result.success && result.datos) {
