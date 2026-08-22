@@ -1,7 +1,4 @@
-// Configuración de la API
-const API_URL = '/api';
 
-// Funciones para Movimientos
 async function listarMovimientos(filtros = {}) {
     const params = new URLSearchParams(filtros);
     const response = await fetch(`${API_URL}/movimientos?${params}`);
