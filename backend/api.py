@@ -897,13 +897,34 @@ async def get_objetivos_por_tipo(tipo_perforacion: str):
 
 @app.get("/api/metros-detalles")
 async def get_metros_detalles():
-    """Obtiene todos los detalles de metros"""
+    """Obtiene TODOS los detalles de metros con paginación"""
     try:
         db = get_db()
-        result = db.client.table("metros_detalles").select("*").execute()
-        return result.data if result.data else []
+        
+        page = 0
+        page_size = 1000
+        all_data = []
+        
+        while True:
+            result = db.client.table("metros_detalles") \
+                .select("*") \
+                .range(page * page_size, (page + 1) * page_size - 1) \
+                .execute()
+            
+            if not result.data:
+                break
+            
+            all_data.extend(result.data)
+            
+            if len(result.data) < page_size:
+                break
+            
+            page += 1
+        
+        print(f"📦 Total detalles de metros: {len(all_data)}")
+        return all_data
     except Exception as e:
-        print(f"❌ Error al obtener metros detalles: {e}")
+        print(f"❌ Error: {e}")
         return []
 
 @app.get("/api/exportar/excel")
