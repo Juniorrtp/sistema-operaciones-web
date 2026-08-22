@@ -500,21 +500,19 @@ async def debug_stock():
 # ============================================================
 
 @app.get("/api/detalles-movimientos")
-async def get_movimientos_detalles():
-    """Obtiene TODOS los detalles de movimientos con código y descripción (con paginación)"""
+async def get_detalles_movimientos():
+    """Obtiene TODOS los detalles de movimientos con todos los campos"""
     try:
         db = get_db()
         
-        # 🔥 USAR PAGINACIÓN para traer todos los registros
         page = 0
         page_size = 1000
         all_data = []
         
-        print("📡 Obteniendo todos los detalles de movimientos...")
-        
         while True:
+            # ⚠️ CAMBIO: Seleccionar TODOS los campos, no solo codigo y descripcion
             result = db.client.table("movimiento_detalles") \
-                .select("codigo, descripcion") \
+                .select("*") \
                 .range(page * page_size, (page + 1) * page_size - 1) \
                 .execute()
             
@@ -529,41 +527,11 @@ async def get_movimientos_detalles():
             
             page += 1
         
-        print(f"📊 Total registros traídos: {len(all_data)}")
-        
-        # 🔥 Crear diccionario con la mejor descripción por código
-        descripciones = {}
-        for row in all_data:
-            codigo = row.get('codigo')
-            descripcion = row.get('descripcion')
-            
-            if not codigo:
-                continue
-            
-            # Si la descripción existe y no está vacía
-            if descripcion and descripcion.strip():
-                # Si no tenemos descripción o esta es más larga, usarla
-                if codigo not in descripciones or len(descripcion) > len(descripciones.get(codigo, '')):
-                    descripciones[codigo] = descripcion.strip()
-            else:
-                # Si no tiene descripción, usar el código
-                if codigo not in descripciones:
-                    descripciones[codigo] = codigo
-        
-        # 🔥 Convertir a lista de resultados
-        data = [{'codigo': k, 'descripcion': v} for k, v in descripciones.items()]
-        
-        print(f"📦 {len(data)} códigos únicos con descripción")
-        return data
+        print(f"📦 Total detalles de movimientos: {len(all_data)}")
+        return all_data
     except Exception as e:
-        print(f"❌ Error en get_movimientos_detalles: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Error: {e}")
         return []
-# ============================================================
-# METROS
-# ============================================================
-
 @app.get("/api/metros")
 async def listar_metros(
     fecha_desde: Optional[str] = None,
