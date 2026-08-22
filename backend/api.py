@@ -1,6 +1,3 @@
-# ============================================================
-# IMPORTS
-# ============================================================
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,7 +7,7 @@ from datetime import datetime
 import os
 import sys
 
-# 🔥 Agregar directorio backend al path
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from models import MovimientoCreate, MovimientoUpdate, MetroCreate, DetalleMovimiento
@@ -21,9 +18,7 @@ from database import get_db
 # ============================================================
 app = FastAPI(title="API Sistema de Operaciones")
 
-# ============================================================
-# CORS (UNA SOLA VEZ)
-# ============================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -872,14 +867,35 @@ async def get_conteo_fecha(fecha: str, ubicacion: str = "TODAS"):
         return {"success": False, "datos": [], "message": str(e)}
 
 
+# ============================================================
+# OBJETIVOS - ENDPOINTS
+# ============================================================
 
-# ============================================================
-# EXPORTAR A EXCEL
-# ============================================================
+@app.get("/api/objetivos")
+async def get_objetivos():
+    """Obtiene todos los objetivos de perforación"""
+    try:
+        db = get_db()
+        result = db.client.table("objetivos").select("*").execute()
+        return result.data if result.data else []
+    except Exception as e:
+        print(f"❌ Error al obtener objetivos: {e}")
+        return []
 
-# ============================================================
-# EXPORTAR A EXCEL - UNA SOLA HOJA
-# ============================================================
+@app.get("/api/objetivos/tipo/{tipo_perforacion}")
+async def get_objetivos_por_tipo(tipo_perforacion: str):
+    """Obtiene objetivos filtrados por tipo de perforación"""
+    try:
+        db = get_db()
+        result = db.client.table("objetivos") \
+            .select("*") \
+            .eq("Tipo Perforacion", tipo_perforacion) \
+            .execute()
+        return result.data if result.data else []
+    except Exception as e:
+        print(f"❌ Error al obtener objetivos por tipo: {e}")
+        return []
+
 
 @app.get("/api/exportar/excel")
 async def exportar_excel(
