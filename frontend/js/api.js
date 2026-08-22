@@ -1,4 +1,18 @@
 
+const isLocal = window.location.hostname === 'localhost' || 
+                window.location.hostname === '127.0.0.1' ||
+                window.location.hostname === '';
+
+// 🔥 URL base de la API
+const API_BASE = isLocal 
+    ? 'http://localhost:8000' 
+    : 'https://sistema-operaciones-web.onrender.com';
+
+const API_URL = `${API_BASE}/api`;
+
+console.log(`🌐 API URL: ${API_URL}`);
+console.log(`📍 Entorno: ${isLocal ? 'Local' : 'Producción'}`);
+// Funciones para Movimientos
 async function listarMovimientos(filtros = {}) {
     const params = new URLSearchParams(filtros);
     const response = await fetch(`${API_URL}/movimientos?${params}`);
