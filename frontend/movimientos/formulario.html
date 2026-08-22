@@ -335,22 +335,6 @@
     ============================================================ -->
     <script src="../js/api.js"></script>
 
-    <script>
-
-        const isLocal = window.location.hostname === 'localhost' || 
-                        window.location.hostname === '127.0.0.1' ||
-                        window.location.hostname === '';
-
-        const API_BASE = isLocal 
-            ? 'http://localhost:8000' 
-            : 'https://sistema-operaciones-web.onrender.com';
-
-        const API_URL = `${API_BASE}/api`;
-
-        console.log(`🌐 API URL: ${API_URL}`);
-    </script>
-
-
 
     <script>
     
@@ -607,7 +591,8 @@
             const busqueda = document.getElementById('busquedaAcero').value.trim();
             const movimiento = document.getElementById('movimiento').value;
             const container = document.getElementById('resultadosAceros');
-            const msgContainer = document.getElementById('infoStockMsg');
+
+            console.log('🔍 Buscando:', { busqueda, movimiento });
 
             if (!busqueda || busqueda.length < 2) {
                 container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Escribe al menos 2 caracteres</div>';
@@ -617,36 +602,33 @@
             container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Buscando...</div>';
 
             try {
-                // Llamar a la API para buscar aceros
-                    
+                const url = `${API_URL}/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`;
+                console.log('📡 URL:', url);
+                
+                const response = await fetch(url);
+                console.log('📡 Status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
                 const aceros = await response.json();
-                const response = await fetch(`${API_URL}/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`);
-                acerosCache = aceros;
+                console.log('📦 Aceros encontrados:', aceros.length);
 
                 if (!aceros || aceros.length === 0) {
                     container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">No se encontraron aceros</div>';
                     return;
                 }
 
-                // Mostrar mensaje de stock según movimiento
-                if (movimiento === 'SALIDA') {
-                    msgContainer.textContent = '🔴 Modo SALIDA: Solo se muestran aceros con stock disponible';
-                    msgContainer.style.color = '#e74c3c';
-                } else {
-                    msgContainer.textContent = '🟢 Modo INGRESO: Se muestran todos los aceros';
-                    msgContainer.style.color = '#27ae60';
-                }
-
                 let html = '';
                 aceros.forEach(a => {
-                    const stockClass = a.stock > 0 ? 'normal' : 'bajo';
-                    const stockText = movimiento === 'SALIDA' ? `Stock: ${a.stock}` : '';
+                    const stockText = a.stock !== undefined ? `Stock: ${a.stock}` : '';
                     html += `
-                        <div class="resultado-acero" onclick="seleccionarAcero('${a.codigo}', '${a.descripcion}')">
-                            <span class="codigo">${a.codigo}</span>
-                            <span class="descripcion">${a.descripcion}</span>
-                            <span class="stock ${stockClass}">${stockText}</span>
-                            <button class="btn-seleccionar-acero">Seleccionar</button>
+                        <div class="resultado-acero" onclick="seleccionarAcero('${a.codigo}', '${a.descripcion}')" style="display:grid; grid-template-columns:1fr 2fr 0.8fr 0.5fr; gap:10px; padding:8px 10px; border-bottom:1px solid #eef1f4; align-items:center; cursor:pointer; transition:background 0.15s;">
+                            <span style="font-weight:600; color:#1a2a3a;">${a.codigo}</span>
+                            <span>${a.descripcion || a.codigo}</span>
+                            <span style="font-weight:500; ${a.stock > 0 ? 'color:#27ae60;' : 'color:#e74c3c;'}">${stockText || 'Sin stock'}</span>
+                            <button class="btn btn-success btn-sm">Seleccionar</button>
                         </div>
                     `;
                 });
@@ -654,11 +636,13 @@
                 container.innerHTML = html;
 
             } catch (error) {
-                console.error('Error buscando aceros:', error);
-                container.innerHTML = '<div class="text-center text-danger" style="padding:20px;">Error al buscar aceros</div>';
+                console.error('❌ Error buscando aceros:', error);
+                container.innerHTML = `<div class="text-center text-danger" style="padding:20px;">❌ Error al buscar: ${error.message}</div>`;
+                mostrarNotificacion('❌ Error al buscar aceros: ' + error.message, 'danger');
             }
         }
-    
+
+
         // ============================================================
         // CARGAR OPERADORES Y EQUIPOS
         // ============================================================
