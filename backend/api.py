@@ -501,8 +501,9 @@ async def debug_stock():
 
 @app.get("/api/detalles-movimientos")
 async def get_detalles_movimientos():
-    """Obtiene TODOS los detalles de movimientos con todos los campos"""
+    """Obtiene TODOS los detalles de movimientos con todos los campos - VERSION 2.0"""
     try:
+        print("🚀🚀🚀 NUEVA VERSIÓN DEL ENDPOINT - VERSION 2.0 🚀🚀🚀")
         db = get_db()
         
         page = 0
@@ -510,7 +511,6 @@ async def get_detalles_movimientos():
         all_data = []
         
         while True:
-            # ⚠️ CAMBIO: Seleccionar TODOS los campos, no solo codigo y descripcion
             result = db.client.table("movimiento_detalles") \
                 .select("*") \
                 .range(page * page_size, (page + 1) * page_size - 1) \
@@ -532,6 +532,7 @@ async def get_detalles_movimientos():
     except Exception as e:
         print(f"❌ Error: {e}")
         return []
+    
 @app.get("/api/metros")
 async def listar_metros(
     fecha_desde: Optional[str] = None,
