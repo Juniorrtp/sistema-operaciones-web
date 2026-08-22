@@ -601,6 +601,9 @@ async def obtener_metro(id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+
 @app.post("/api/metros")
 async def crear_metro(data: dict):
     try:
@@ -806,15 +809,6 @@ async def listar_actividades():
         return []
 
 
-# ============================================================
-# STOCK - CONTEO FÍSICO
-# ============================================================
-
-
-# ============================================================
-# MOVIMIENTOS - DETALLES (para obtener descripciones)
-# ============================================================
-
 
 
 @app.post("/api/stock/conteo")
@@ -896,6 +890,21 @@ async def get_objetivos_por_tipo(tipo_perforacion: str):
         print(f"❌ Error al obtener objetivos por tipo: {e}")
         return []
 
+
+# ============================================================
+# METROS DETALLES - ENDPOINTS
+# ============================================================
+
+@app.get("/api/metros-detalles")
+async def get_metros_detalles():
+    """Obtiene todos los detalles de metros"""
+    try:
+        db = get_db()
+        result = db.client.table("metros_detalles").select("*").execute()
+        return result.data if result.data else []
+    except Exception as e:
+        print(f"❌ Error al obtener metros detalles: {e}")
+        return []
 
 @app.get("/api/exportar/excel")
 async def exportar_excel(
