@@ -158,9 +158,7 @@
 </head>
 <body>
 
-    <!-- ============================================================
-    NAVBAR
-    ============================================================ -->
+
     <nav class="navbar">
         <div class="container">
             <a href="../index.html" class="navbar-brand">
@@ -173,16 +171,12 @@
         </div>
     </nav>
 
-    <!-- ============================================================
-    CONTENIDO
-    ============================================================ -->
+
     <div class="container">
 
         <form id="formMovimiento" onsubmit="event.preventDefault(); guardarMovimiento();">
 
-            <!-- ============================================================
-            DATOS GENERALES
-            ============================================================ -->
+     
             <div class="form-card">
                 <div class="card-title">📋 Información General</div>
 
@@ -246,8 +240,6 @@
                     </div>
                 </div>
 
-                <!-- Campos de Salida (se muestran solo cuando movimiento=SALIDA) -->
-                <!-- Campos de Salida (se muestran solo cuando movimiento=SALIDA) -->
                 <div id="camposSalida" style="display:none; margin-top:12px; border-top:1px dashed #eef1f4; padding-top:12px;">
                     <div class="form-row" style="grid-template-columns: repeat(3, 1fr);">
                         <div class="form-group">
@@ -258,10 +250,23 @@
                         </div>
                         <div class="form-group">
                             <label>Equipo</label>
-                            <select id="equipo" class="form-select" onchange="actualizarCompania()">
+                            <select id="equipo" class="form-select" onchange="actualizarCompania(); actualizarTipoPerforacion();"></select>
                                 <option value="">Seleccionar equipo</option>
                             </select>
                         </div>
+                        
+                        <div class="form-group" style="margin-top:12px;">
+                            <label>Tipo Perforación *</label>
+                            <select id="tipo_perforacion" class="form-select" required>
+                                <option value="">Seleccionar</option>
+                                <option value="DIAMANTINA">DIAMANTINA</option>
+                                <option value="ROTATIVA">ROTATIVA</option>
+                                <option value="PERCUSION">PERCUSION</option>
+                            </select>
+                            <small class="text-muted">Se actualiza automáticamente al seleccionar un equipo</small>
+                        </div>
+
+
                         <div class="form-group">
                             <label>Guardia</label>
                             <input type="text" id="guardia" class="form-control" placeholder="Guardia">
@@ -275,9 +280,7 @@
 
             </div>
 
-            <!-- ============================================================
-            DETALLES
-            ============================================================ -->
+
             <div class="form-card">
                 <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
                     📋 Detalles
@@ -294,9 +297,7 @@
                 </div>
             </div>
 
-            <!-- ============================================================
-            BOTONES
-            ============================================================ -->
+           
             <div style="display:flex; gap:12px; margin-top:20px; padding-bottom:30px;">
                 <button type="submit" class="btn btn-success" style="padding:10px 32px;">💾 Guardar</button>
                 <a href="listar.html" class="btn btn-secondary" style="padding:10px 24px;">❌ Cancelar</a>
@@ -305,9 +306,6 @@
         </form>
     </div>
 
-    <!-- ============================================================
-    MODAL BUSCADOR DE ACEROS
-    ============================================================ -->
     <div id="modalBuscador">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -330,9 +328,7 @@
         </div>
     </div>
 
-    <!-- ============================================================
-    SCRIPTS
-    ============================================================ -->
+ 
     <script src="../js/api.js"></script>
 
 
@@ -360,9 +356,6 @@
             toggleCamposSalida();
         });
 
-        // ============================================================
-        // TOGGLE CAMPOS SALIDA
-        // ============================================================
 
         function toggleCamposSalida() {
             const movimiento = document.getElementById('movimiento').value;
@@ -370,14 +363,12 @@
             campos.style.display = movimiento === 'SALIDA' ? 'block' : 'none';
         }
 
-        // ============================================================
-        // GESTIÓN DE DETALLES
-        // ============================================================
-
+     
         function agregarDetalle(datos = null) {
             const container = document.getElementById('detallesContainer');
             const row = document.createElement('div');
             row.className = 'detalle-row';
+            row.dataset.familia = datos?.familia || '';
 
             row.innerHTML = `
                 <select class="form-select form-select-sm brazo-select">
@@ -393,6 +384,7 @@
             `;
 
             container.appendChild(row);
+            return row;
         }
 
         function eliminarDetalle(btn) {
@@ -420,20 +412,21 @@
                         codigo: codigo,
                         descripcion: descripcion,
                         cantidad: cantidad,
-                        razon: motivo
+                        razon: motivo,
+                        // ✅ AGREGAR: Obtener familia del dataset
+                        familia: row.dataset.familia || '',
+                        // ✅ AGREGAR: Obtener tipo_perforacion del campo general
+                        tipo_perforacion: document.getElementById('tipo_perforacion').value
                     });
                 }
             });
             return detalles;
         }
 
-        // ============================================================
-        // CARGAR DATOS PARA EDICIÓN
-        // ============================================================
 
         async function cargarDatos(id) {
+            const data = await obtenerMovimiento(id);
             try {
-                const data = await obtenerMovimiento(id);
 
                 document.getElementById('fecha').value = data.fecha;
                 document.getElementById('ano').value = data.ano;
@@ -446,15 +439,28 @@
                 document.getElementById('equipo').value = data.equipo || '';
                 document.getElementById('guardia').value = data.guardia || '';
                 document.getElementById('compania').value = data.compania || '';
+                document.getElementById('tipo_perforacion').value = data.tipo_perforacion || '';
 
                 toggleCamposSalida();
 
-                // Cargar detalles
+                actualizarGuardia();
+                actualizarCompania();
+                actualizarTipoPerforacion(); 
+
+                if (data.tipo_perforacion) {
+                    document.getElementById('tipo_perforacion').value = data.tipo_perforacion;
+                }
+
                 if (data.detalles && data.detalles.length > 0) {
                     const container = document.getElementById('detallesContainer');
                     container.innerHTML = '';
                     data.detalles.forEach(d => {
-                        agregarDetalle(d);
+                        // ✅ AGREGAR: Convertir a positivo para edición
+                        const cantidadPositiva = Math.abs(d.cantidad || 0);
+                        agregarDetalle({
+                            ...d,
+                            cantidad: cantidadPositiva
+                        });
                     });
                 } else {
                     agregarDetalle();
@@ -466,9 +472,7 @@
             }
         }
 
-        // ============================================================
-        // GUARDAR MOVIMIENTO
-        // ============================================================
+        
 
         async function guardarMovimiento() {
             // Validar campos obligatorios
@@ -477,8 +481,9 @@
             const guia = document.getElementById('guia').value.trim();
             const movimiento = document.getElementById('movimiento').value;
 
-            if (!fecha || !ano || !guia) {
-                mostrarNotificacion('⚠️ Fecha, Año y Guía son obligatorios', 'warning');
+            const tipo_perforacion = document.getElementById('tipo_perforacion').value;
+            if (!fecha || !ano || !guia || !tipo_perforacion) {
+                mostrarNotificacion('⚠️ Fecha, Año, Guía y Tipo Perforación son obligatorios', 'warning');
                 return;
             }
 
@@ -500,6 +505,7 @@
                 equipo: document.getElementById('equipo').value,
                 guardia: document.getElementById('guardia').value,
                 compania: document.getElementById('compania').value,
+                tipo_perforacion: tipo_perforacion,
                 detalles: detalles
             };
 
@@ -554,9 +560,7 @@
             // Enfocar en guía para el próximo ingreso
             document.getElementById('guia').focus();
         }
-                // ============================================================
-        // BUSCADOR DE ACEROS
-        // ============================================================
+
 
         let acerosCache = [];
 
@@ -643,9 +647,6 @@
         }
 
 
-        // ============================================================
-        // CARGAR OPERADORES Y EQUIPOS
-        // ============================================================
 
         let operadoresCache = [];
         let equiposCache = [];
@@ -724,9 +725,19 @@
         }
 
 
-        // ============================================================
-        // ACTUALIZAR GUARDIA Y COMPAÑÍA
-        // ============================================================
+        function actualizarTipoPerforacion() {
+            const equipoSelect = document.getElementById('equipo');
+            const tipoPerforacionSelect = document.getElementById('tipo_perforacion');
+            const equipoNombre = equipoSelect.value;
+            
+            if (!equipoNombre) return;
+            
+            const equipo = equiposCache.find(eq => eq.equipo === equipoNombre);
+            if (equipo && equipo.tipo_perforacion) {
+                tipoPerforacionSelect.value = equipo.tipo_perforacion;
+            }
+        }
+
 
         function actualizarGuardia() {
             const operadorSelect = document.getElementById('operador');
@@ -764,10 +775,6 @@
             }
         }
 
-
-        // ============================================================
-        // NOTIFICACIONES
-        // ============================================================
 
         function mostrarNotificacion(mensaje, tipo = 'success') {
             const alert = document.createElement('div');

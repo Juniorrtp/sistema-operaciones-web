@@ -8,6 +8,8 @@ class DetalleMovimiento(BaseModel):
     descripcion: str
     cantidad: float
     razon: Optional[str] = ""
+    familia: Optional[str] = ""
+    tipo_perforacion: Optional[str] = ""
 
 class MovimientoCreate(BaseModel):
     fecha: str
@@ -19,6 +21,9 @@ class MovimientoCreate(BaseModel):
     estado: Optional[str] = ""
     operador: Optional[str] = ""
     equipo: Optional[str] = ""
+    guardia: Optional[str] = ""      # ✅ AGREGAR
+    compania: Optional[str] = ""     # ✅ AGREGAR
+    tipo_perforacion: Optional[str] = ""  # ✅ AGREGAR
     detalles: List[DetalleMovimiento]
 
 class MovimientoUpdate(BaseModel):
@@ -31,6 +36,11 @@ class MovimientoUpdate(BaseModel):
     estado: Optional[str] = None
     operador: Optional[str] = None
     equipo: Optional[str] = None
+    guardia: Optional[str] = None    # ✅ AGREGAR
+    compania: Optional[str] = None   # ✅ AGREGAR
+    tipo_perforacion: Optional[str] = None  # ✅ AGREGAR
+    detalles: Optional[List[DetalleMovimiento]] = None  # ✅ AGREGAR
+
 
 class MetroCreate(BaseModel):
     fecha: str

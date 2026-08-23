@@ -49,9 +49,7 @@ if os.path.exists(os.path.join(FRONTEND_DIR, "metros")):
 if os.path.exists(os.path.join(FRONTEND_DIR, "stock")):
     app.mount("/stock", StaticFiles(directory=os.path.join(FRONTEND_DIR, "stock")), name="stock")
 
-# ============================================================
-# ENDPOINTS DE PÁGINAS HTML
-# ============================================================
+
 
 @app.get("/")
 async def servir_index():
@@ -70,9 +68,7 @@ async def servir_pagina(pagina: str):
     return {"error": "Página no encontrada"}
 
 
-# ============================================================
-# VARIABLE GLOBAL DE STOCK
-# ============================================================
+
 stock_cache = {}
 
 def actualizar_cache_stock():
@@ -128,9 +124,7 @@ async def startup_event():
     actualizar_cache_stock()
 
 
-# ============================================================
-# STOCK - ENDPOINTS
-# ============================================================
+
 
 @app.get("/api/stock")
 async def get_all_stock():
@@ -155,16 +149,6 @@ async def debug_stock_cache():
         "ejemplos": dict(list(stock_cache.items())[:10])
     }
 
-
-# ============================================================
-# DETALLES DE MOVIMIENTOS (descripciones)
-# ============================================================
-
-
-
-# ============================================================
-# MOVIMIENTOS - ENDPOINTS
-# ============================================================
 
 @app.get("/api/movimientos")
 async def listar_movimientos(
@@ -196,11 +180,21 @@ async def obtener_movimiento(id: int):
     try:
         db = get_db()
         general = db.get_by_id("movimiento_general", id)
+        # ✅ AGREGAR
+        if 'tipo_perforacion' not in general:
+            general['tipo_perforacion'] = None
+
+
         if not general:
             raise HTTPException(status_code=404, detail="No encontrado")
         
         detalles = db.client.table("movimiento_detalles").select("*").eq("entrega_id", id).execute()
         general["detalles"] = detalles.data if detalles.data else []
+        # ✅ AGREGAR
+        for detalle in general["detalles"]:
+            if 'cantidad' in detalle:
+                detalle['cantidad'] = abs(detalle['cantidad'])
+
         return general
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -212,6 +206,10 @@ async def crear_movimiento(data: MovimientoCreate):
         db = get_db()
         
         cabecera = data.model_dump(exclude={'detalles'})
+        # ✅ AGREGAR
+        if 'tipo_perforacion' not in cabecera:
+            cabecera['tipo_perforacion'] = None
+
         
         for key in ['operador', 'equipo', 'guardia', 'compania', 'estado', 'turno']:
             if key in cabecera and cabecera[key] == '':
@@ -228,6 +226,12 @@ async def crear_movimiento(data: MovimientoCreate):
         for detalle in data.detalles:
             nuevo_detalle = detalle.model_dump()
             nuevo_detalle['entrega_id'] = movimiento_id
+            if 'familia' not in nuevo_detalle:
+                nuevo_detalle['familia'] = None
+            if 'tipo_perforacion' not in nuevo_detalle:
+                nuevo_detalle['tipo_perforacion'] = cabecera.get('tipo_perforacion')
+
+
             
             if es_salida:
                 nuevo_detalle['cantidad'] = -abs(detalle.cantidad)
@@ -250,12 +254,33 @@ async def actualizar_movimiento(id: int, data: MovimientoUpdate):
     try:
         db = get_db()
         data_dict = {k: v for k, v in data.dict().items() if v is not None}
+        detalles = data_dict.pop('detalles', None)
+        
         if data_dict:
             db.client.table("movimiento_general").update(data_dict).eq("id", id).execute()
+        
+        if detalles is not None:
+            db.client.table("movimiento_detalles").delete().eq("entrega_id", id).execute()
+            movimiento = data_dict.get('movimiento', 'INGRESO')
+            es_salida = movimiento == "SALIDA"
+            
+            for detalle in detalles:
+                nuevo_detalle = detalle.dict()
+                nuevo_detalle['entrega_id'] = id
+                if es_salida:
+                    nuevo_detalle['cantidad'] = -abs(nuevo_detalle['cantidad'])
+                else:
+                    nuevo_detalle['cantidad'] = abs(nuevo_detalle['cantidad'])
+                db.client.table("movimiento_detalles").insert(nuevo_detalle).execute()
+            
+            actualizar_cache_stock()
+        
         return {"success": True}
     except Exception as e:
+        print(f"❌ Error en actualizar_movimiento: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.delete("/api/movimientos/{id}")
 async def eliminar_movimiento(id: int):
@@ -269,10 +294,7 @@ async def eliminar_movimiento(id: int):
         print(f"Error en eliminar_movimiento: {e}")
         return {"success": False, "error": str(e)}
 
-#
-# ============================================================
-# STOCK (VERSIÓN ÚNICA)
-# ============================================================
+
 
 stock_cache = {}
 
@@ -657,9 +679,7 @@ async def eliminar_operador(id: int):
         return {"success": False, "error": str(e)}
 
 
-# ============================================================
-# EQUIPOS
-# ============================================================
+
 @app.get("/api/equipos")
 async def listar_equipos():
     """Lista todos los equipos"""
@@ -721,9 +741,6 @@ async def eliminar_equipo(id: int):
         return {"success": False, "error": str(e)}
 
 
-# ============================================================
-# ACTIVIDADES
-# ============================================================
 @app.get("/api/actividades")
 async def listar_actividades():
     """Lista todas las actividades"""
@@ -788,9 +805,6 @@ async def get_conteo_fecha(fecha: str, ubicacion: str = "TODAS"):
         return {"success": False, "datos": [], "message": str(e)}
 
 
-# ============================================================
-# OBJETIVOS - ENDPOINTS
-# ============================================================
 
 @app.get("/api/objetivos")
 async def get_objetivos():
@@ -818,9 +832,6 @@ async def get_objetivos_por_tipo(tipo_perforacion: str):
         return []
 
 
-# ============================================================
-# METROS DETALLES - ENDPOINTS
-# ============================================================
 
 @app.get("/api/metros-detalles")
 async def get_metros_detalles():
