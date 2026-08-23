@@ -508,8 +508,8 @@
                 mostrarNotificacion('📊 Generando Excel...', 'info');
                 
                 // Usar fetch para descargar el archivo
-                const response = await fetch(`http://localhost:8000/api/exportar/excel?desde=${desde}&hasta=${hasta}&tipo=movimientos`);
                 
+                const response = await fetch(`${API_URL}/exportar/excel?desde=${desde}&hasta=${hasta}&tipo=movimientos`);
                 if (!response.ok) {
                     throw new Error('Error al exportar');
                 }

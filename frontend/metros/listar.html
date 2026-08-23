@@ -469,8 +469,7 @@
             try {
                 mostrarNotificacion('📊 Generando Excel...', 'info');
                 
-                const response = await fetch(`http://localhost:8000/api/exportar/excel?desde=${desde}&hasta=${hasta}&tipo=metros`);
-                
+                const response = await fetch(`${API_URL}/exportar/excel?desde=${desde}&hasta=${hasta}&tipo=metros`);
                 if (!response.ok) {
                     throw new Error('Error al exportar');
                 }
