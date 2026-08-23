@@ -306,7 +306,7 @@ def calcular_rendimiento_operadores(
     ]
     
     # ============================================================
-    # 3. FILTRAR METROS (igual que en PyQt6)
+    # 3. FILTRAR METROS GENERALES (para obtener equipo y metadatos)
     # ============================================================
     metros_filtrados = [
         m for m in metros 
@@ -316,7 +316,16 @@ def calcular_rendimiento_operadores(
     ]
     
     # ============================================================
-    # 4. CREAR DICCIONARIOS DE DETALLES
+    # 4. CREAR DICCIONARIO DE METROS GENERALES POR ID
+    # ============================================================
+    metros_dict = {}
+    for metro in metros_filtrados:
+        registro_id = metro.get('id')
+        if registro_id:
+            metros_dict[registro_id] = metro
+    
+    # ============================================================
+    # 5. CREAR DICCIONARIOS DE DETALLES
     # ============================================================
     detalles_por_entrega = defaultdict(list)
     for detalle in detalles_movimientos:
@@ -324,14 +333,8 @@ def calcular_rendimiento_operadores(
         if entrega_id:
             detalles_por_entrega[entrega_id].append(detalle)
     
-    detalles_metros_por_registro = defaultdict(list)
-    for detalle in metros_detalles:
-        registro_id = detalle.get('registro_id')
-        if registro_id:
-            detalles_metros_por_registro[registro_id].append(detalle)
-    
     # ============================================================
-    # 5. AGRUPAR POR GUARDIA, OPERADOR Y TIPO (igual que en PyQt6)
+    # 6. AGRUPAR POR GUARDIA, OPERADOR Y TIPO
     # ============================================================
     datos_operadores = defaultdict(lambda: defaultdict(list))
     
@@ -366,17 +369,28 @@ def calcular_rendimiento_operadores(
                 if not tipo_norm:
                     continue
                 
-                # Buscar metros para este operador/equipo (como en PyQt6: subquery)
+                # ============================================================
+                # BUSCAR METROS PARA ESTE OPERADOR/EQUIPO USANDO metros_detalles
+                # ============================================================
                 metros_op = 0
-                for metro in metros_filtrados:
+                
+                # Recorrer todos los metros_detalles
+                for detalle_metro in metros_detalles:
+                    registro_id = detalle_metro.get('registro_id')
+                    if not registro_id:
+                        continue
+                    
+                    # Buscar el metro general correspondiente
+                    metro = metros_dict.get(registro_id)
+                    if not metro:
+                        continue
+                    
+                    # Verificar que coincida operador y equipo
                     if ((metro.get('operador') or '').strip().upper() == operador and 
                         metro.get('equipo') == movimiento.get('equipo')):
                         
-                        registro_id = metro.get('id')
-                        if registro_id:
-                            detalles_metro = detalles_metros_por_registro.get(registro_id, [])
-                            for d in detalles_metro:
-                                metros_op += d.get('mp_produccion') or 0
+                        # Sumar mp_produccion de este detalle
+                        metros_op += detalle_metro.get('mp_produccion') or 0
                 
                 entregado = abs(cantidad)
                 
@@ -405,8 +419,6 @@ def calcular_rendimiento_operadores(
             )
     
     return dict(datos_operadores)
-
-
 # ============================================================
 # MÉTRICAS (igual que en PyQt6)
 # ============================================================
