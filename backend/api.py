@@ -571,7 +571,14 @@ async def obtener_metro(id: int):
 
 
 
-
+@app.get("/api/test-version")
+async def test_version():
+    """Endpoint de prueba para verificar que el código se actualiza"""
+    return {
+        "version": "2.0",
+        "timestamp": str(datetime.now()),
+        "message": "¡Este endpoint confirma que el código está actualizado!"
+    }
 
 @app.post("/api/metros")
 async def crear_metro(data: dict):
