@@ -160,50 +160,6 @@ async def debug_stock_cache():
 # DETALLES DE MOVIMIENTOS (descripciones)
 # ============================================================
 
-@app.get("/api/detalles-movimientos")
-async def get_movimientos_detalles():
-    """Obtiene todos los detalles de movimientos con código y descripción"""
-    try:
-        db = get_db()
-        
-        page = 0
-        page_size = 1000
-        all_data = []
-        
-        while True:
-            result = db.client.table("movimiento_detalles") \
-                .select("codigo, descripcion") \
-                .range(page * page_size, (page + 1) * page_size - 1) \
-                .execute()
-            
-            if not result.data:
-                break
-            
-            all_data.extend(result.data)
-            
-            if len(result.data) < page_size:
-                break
-            
-            page += 1
-        
-        descripciones = {}
-        for row in all_data:
-            codigo = row.get('codigo')
-            descripcion = row.get('descripcion')
-            if codigo:
-                if descripcion and descripcion.strip():
-                    if codigo not in descripciones or len(descripcion) > len(descripciones.get(codigo, '')):
-                        descripciones[codigo] = descripcion.strip()
-                else:
-                    if codigo not in descripciones:
-                        descripciones[codigo] = codigo
-        
-        data = [{'codigo': k, 'descripcion': v} for k, v in descripciones.items()]
-        print(f"📦 {len(data)} detalles con descripción")
-        return data
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return []
 
 
 # ============================================================
@@ -492,12 +448,7 @@ async def debug_stock():
     except Exception as e:
         return {"error": str(e)}
 
-# ============================================================
-# MOVIMIENTOS - DETALLES (para obtener descripciones)
-# ============================================================
-# ============================================================
-# MOVIMIENTOS - DETALLES (para obtener descripciones)
-# ============================================================
+
 
 @app.get("/api/detalles-movimientos")
 async def get_detalles_movimientos():
