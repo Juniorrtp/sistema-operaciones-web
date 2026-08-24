@@ -15,7 +15,9 @@ from utils.api_client import (
     load_movimientos_detalles,
     load_metros_general,
     load_metros_detalles,
-    load_stock_from_api
+    load_stock_from_api,
+    load_objetivos
+    
 )
 # Aplicar estilos personalizados
 apply_custom_styles()
@@ -162,6 +164,156 @@ def load_metros_detalles():
 def load_stock_from_api():
     return fetch_from_api("stock")
 
+
+# ============================================
+# FUNCIÓN: RENDIMIENTO DE ACEROS (desde Rendimiento.py)
+# ============================================
+
+@st.cache_data(ttl=300)
+def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
+    """Procesa datos de rendimiento de aceros (misma lógica que Rendimiento)"""
+    
+    familias_target = ['SHANK', 'ACOPLES', 'BARRAS', 'RIMADORAS']
+    
+    # Cargar datos
+    mov_detalles = load_movimientos_detalles()
+    met_detalles = load_metros_detalles()
+    mov_general = load_movimientos_general(fecha_desde, fecha_hasta)
+    objetivos = load_objetivos()
+    
+    if not mov_general or not mov_detalles:
+        return {}
+    
+    df_mov_gen = pd.DataFrame(mov_general)
+    df_mov_det = pd.DataFrame(mov_detalles)
+    df_met_det = pd.DataFrame(met_detalles)
+    
+    # Filtrar movimientos generales
+    if año and mes:
+        df_mov_gen = df_mov_gen[
+            (df_mov_gen['ano'] == int(año)) &
+            (df_mov_gen['mes'] == mes.upper())
+        ]
+    
+    if fecha_desde and fecha_hasta:
+        df_mov_gen = df_mov_gen[
+            (pd.to_datetime(df_mov_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
+            (pd.to_datetime(df_mov_gen['fecha']) <= pd.to_datetime(fecha_hasta))
+        ]
+    
+    if compania != "TODAS":
+        df_mov_gen = df_mov_gen[df_mov_gen['compania'] == compania.strip()]
+    
+    if df_mov_gen.empty:
+        return {}
+    
+    mov_ids = df_mov_gen['id'].tolist()
+    df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
+    
+    if df_mov_det_filtrado.empty:
+        return {}
+    
+    # Unir con generales para obtener equipo y tipo_perforacion
+    df_mov_det_filtrado = df_mov_det_filtrado.merge(
+        df_mov_gen[['id', 'equipo', 'tipo_perforacion']],
+        left_on='entrega_id',
+        right_on='id',
+        how='left'
+    )
+    
+    # Filtrar solo familias target
+    df_mov_det_filtrado = df_mov_det_filtrado[
+        df_mov_det_filtrado['familia'].str.upper().isin(familias_target)
+    ]
+    
+    if df_mov_det_filtrado.empty:
+        return {}
+    
+    # Crear diccionario de objetivos
+    obj_dict = {}
+    for obj in objetivos:
+        tipo = obj.get('Tipo Perforacion', '')
+        familia = obj.get('Acero', '')
+        objetivo_val = obj.get('Objetivo', 0)
+        if objetivo_val is None:
+            objetivo_val = 0
+        obj_dict[(tipo, familia)] = objetivo_val
+    
+    # Obtener metros por equipo y familia
+    df_met_gen = pd.DataFrame(load_metros_general())
+    
+    if año and mes:
+        df_met_gen = df_met_gen[
+            (df_met_gen['ano'] == int(año)) &
+            (df_met_gen['mes'] == mes.upper())
+        ]
+    
+    if fecha_desde and fecha_hasta:
+        df_met_gen = df_met_gen[
+            (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
+            (pd.to_datetime(df_met_gen['fecha']) <= pd.to_datetime(fecha_hasta))
+        ]
+    
+    if compania != "TODAS":
+        df_met_gen = df_met_gen[df_met_gen['compania'] == compania.strip()]
+    
+    met_ids = df_met_gen['id'].tolist()
+    df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
+    
+    # Agrupar por tipo_perforacion, familia
+    agrupado = df_mov_det_filtrado.groupby(['tipo_perforacion', 'familia']).agg({
+        'cantidad': lambda x: x.abs().sum()
+    }).reset_index()
+    
+    # Calcular resultados por tipo y familia
+    resultados = []
+    
+    for tipo in agrupado['tipo_perforacion'].unique():
+        df_tipo = agrupado[agrupado['tipo_perforacion'] == tipo]
+        
+        # Obtener metros para este tipo
+        met_ids_tipo = df_met_gen[df_met_gen['tipo_perforacion'] == tipo]['id'].tolist()
+        df_met_tipo = df_met_det_filtrado[df_met_det_filtrado['registro_id'].isin(met_ids_tipo)]
+        
+        total_mp_tipo = df_met_tipo['total_mp'].sum()
+        mp_rimado_tipo = df_met_tipo['mp_rimado'].sum()
+        
+        for _, row in df_tipo.iterrows():
+            familia = row['familia']
+            cantidad = row['cantidad']
+            
+            if familia.upper() == 'RIMADORAS':
+                metros = mp_rimado_tipo
+            else:
+                metros = total_mp_tipo
+            
+            rendimiento = metros / cantidad if cantidad > 0 else 0
+            objetivo = obj_dict.get((tipo, familia), 0)
+            eficiencia = (rendimiento / objetivo * 100) if objetivo > 0 else 0
+            
+            resultados.append({
+                'Tipo_Perforacion': tipo,
+                'Familia': familia,
+                'Cantidad': cantidad,
+                'Metros': metros,
+                'Rendimiento': rendimiento,
+                'Objetivo': objetivo,
+                'Eficiencia': eficiencia
+            })
+    
+    if not resultados:
+        return {}
+    
+    df_resultado = pd.DataFrame(resultados)
+    
+    # Agrupar por tipo_perforacion
+    tipos = df_resultado['Tipo_Perforacion'].unique()
+    resultados_final = {}
+    
+    for tipo in tipos:
+        resultados_final[tipo] = df_resultado[df_resultado['Tipo_Perforacion'] == tipo].drop(columns=['Tipo_Perforacion'])
+    
+    return resultados_final
 # ============================================
 # FUNCIÓN: PROCESAR CONSUMOS
 # ============================================
@@ -878,6 +1030,62 @@ if consumos_data:
             titulo="🏆 Top 10 Aceros más Consumidos"
         )
         st.markdown(html_tabla, unsafe_allow_html=True)
+
+
+# ============================================
+# SECCIÓN: RENDIMIENTO DE ACEROS
+# ============================================
+
+st.header("🏆 Rendimiento de Aceros")
+
+with st.spinner("Procesando rendimiento de aceros..."):
+    rendimiento_aceros = process_rendimiento_aceros(
+        fecha_inicio, fecha_fin, año_seleccionado, mes_seleccionado, "TODAS"
+    )
+
+if rendimiento_aceros:
+    for tipo, df in rendimiento_aceros.items():
+        if not df.empty:
+            st.markdown(f"### 📌 {tipo}")
+            
+            # Formatear columnas
+            df_display = df.copy()
+            df_display['Cantidad'] = df_display['Cantidad'].apply(lambda x: f"{x:,.0f}")
+            df_display['Metros'] = df_display['Metros'].apply(lambda x: f"{x:,.2f}")
+            df_display['Rendimiento'] = df_display['Rendimiento'].apply(lambda x: f"{x:,.2f}")
+            df_display['Objetivo'] = df_display['Objetivo'].apply(lambda x: f"{x:,.2f}")
+            df_display['Eficiencia'] = df_display['Eficiencia'].apply(lambda x: f"{x:.1f}%")
+            
+            html_rendimiento = crear_tabla_html(
+                df_display,
+                titulo=""
+            )
+            st.markdown(html_rendimiento, unsafe_allow_html=True)
+            
+            # Gráfico de eficiencia (opcional)
+            if len(df) > 1:
+                fig_rendimiento = px.bar(
+                    df,
+                    x='Familia',
+                    y='Eficiencia',
+                    color='Eficiencia',
+                    color_continuous_scale='RdYlGn',
+                    title=f"Eficiencia por Familia - {tipo}",
+                    text=df['Eficiencia'].apply(lambda x: f"{x:.1f}%")
+                )
+                fig_rendimiento.update_traces(textposition='outside')
+                fig_rendimiento.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    height=300,
+                    margin=dict(l=0, r=0, t=40, b=0)
+                )
+                st.plotly_chart(fig_rendimiento, use_container_width=True)
+            
+            st.markdown("---")
+else:
+    st.info("ℹ️ No hay datos de rendimiento de aceros para los filtros seleccionados")
+
 
 # ============================================
 # PIE DE PÁGINA
