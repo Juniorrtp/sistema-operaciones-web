@@ -173,74 +173,72 @@ def load_stock_from_api():
 def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
     """Procesa datos de rendimiento de aceros (misma lógica que Rendimiento)"""
     
-    familias_target = ['SHANK', 'ACOPLES', 'BARRAS', 'RIMADORAS']
-    
     # Cargar datos
     mov_detalles = load_movimientos_detalles()
     met_detalles = load_metros_detalles()
-    mov_general = load_movimientos_general(fecha_desde, fecha_hasta)
     objetivos = load_objetivos()
     
-    if not mov_general or not mov_detalles:
-        return {}
-    
-    df_mov_gen = pd.DataFrame(mov_general)
-    df_mov_det = pd.DataFrame(mov_detalles)
-    df_met_det = pd.DataFrame(met_detalles)
-    
     # Filtrar movimientos generales
-    if año and mes:
-        df_mov_gen = df_mov_gen[
-            (df_mov_gen['ano'] == int(año)) &
-            (df_mov_gen['mes'] == mes.upper())
-        ]
+    df_mov_gen = pd.DataFrame(load_movimientos_general())
     
-    if fecha_desde and fecha_hasta:
-        df_mov_gen = df_mov_gen[
-            (pd.to_datetime(df_mov_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
-            (pd.to_datetime(df_mov_gen['fecha']) <= pd.to_datetime(fecha_hasta))
-        ]
+    año_int = int(año)
+    mes_clean = mes.strip().upper()
     
-    if compania != "TODAS":
-        df_mov_gen = df_mov_gen[df_mov_gen['compania'] == compania.strip()]
-    
-    if df_mov_gen.empty:
-        return {}
-    
-    mov_ids = df_mov_gen['id'].tolist()
-    df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
-    
-    if df_mov_det_filtrado.empty:
-        return {}
-    
-    # 🔥 CORREGIDO: Unir con generales para obtener equipo y tipo_perforacion
-    # Verificar qué columnas existen en df_mov_gen
-    columnas_a_traer = ['id']
-    if 'equipo' in df_mov_gen.columns:
-        columnas_a_traer.append('equipo')
-    if 'tipo_perforacion' in df_mov_gen.columns:
-        columnas_a_traer.append('tipo_perforacion')
-    
-    df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen[columnas_a_traer],
-        left_on='entrega_id',
-        right_on='id',
-        how='left'
-    )
-    
-    # Si 'tipo_perforacion' no existe, crearla con valor por defecto
-    if 'tipo_perforacion' not in df_mov_det_filtrado.columns:
-        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
-    
-    if 'equipo' not in df_mov_det_filtrado.columns:
-        df_mov_det_filtrado['equipo'] = 'SIN_EQUIPO'
-    
-    # Filtrar solo familias target
-    df_mov_det_filtrado = df_mov_det_filtrado[
-        df_mov_det_filtrado['familia'].str.upper().isin(familias_target)
+    # 🔥 CORREGIDO: Filtrar por año, mes y SOLO SALIDA
+    df_mov_gen_filtrado = df_mov_gen[
+        (df_mov_gen['ano'] == año_int) &
+        (df_mov_gen['mes'] == mes_clean) &
+        (df_mov_gen['movimiento'] == 'SALIDA')  # 🔥 CLAVE: Solo SALIDA
     ]
     
-    if df_mov_det_filtrado.empty:
+    if compania != "TODAS":
+        df_mov_gen_filtrado = df_mov_gen_filtrado[
+            df_mov_gen_filtrado['compania'] == compania.strip()
+        ]
+    
+    # Filtrar metros generales
+    df_met_gen = pd.DataFrame(load_metros_general())
+    
+    df_met_gen_filtrado = df_met_gen[
+        (df_met_gen['ano'] == año_int) &
+        (df_met_gen['mes'] == mes_clean)
+    ]
+    
+    if compania != "TODAS":
+        df_met_gen_filtrado = df_met_gen_filtrado[
+            df_met_gen_filtrado['compania'] == compania.strip()
+        ]
+    
+    # Obtener tipos comunes
+    tipos_mov = set(df_mov_gen_filtrado['tipo_perforacion'].dropna().unique())
+    tipos_met = set(df_met_gen_filtrado['tipo_perforacion'].dropna().unique())
+    tipos_comunes = list(tipos_mov.intersection(tipos_met))
+    
+    # Usar todos los tipos comunes (no hay filtro de tipos_perf en Avance Semanal)
+    tipos_a_usar = tipos_comunes
+    
+    if not tipos_a_usar:
+        return {}
+    
+    # Aplicar filtro de tipos
+    df_mov_gen_filtrado = df_mov_gen_filtrado[df_mov_gen_filtrado['tipo_perforacion'].isin(tipos_a_usar)]
+    df_met_gen_filtrado = df_met_gen_filtrado[df_met_gen_filtrado['tipo_perforacion'].isin(tipos_a_usar)]
+    
+    if df_mov_gen_filtrado.empty or df_met_gen_filtrado.empty:
+        return {}
+    
+    # Procesar movimientos detalles
+    df_mov_det = pd.DataFrame(mov_detalles)
+    mov_ids = df_mov_gen_filtrado['id'].tolist()
+    df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
+    df_mov_det_filtrado['cantidad'] = df_mov_det_filtrado['cantidad'].abs()
+    
+    # Procesar metros detalles
+    df_met_det = pd.DataFrame(met_detalles)
+    met_ids = df_met_gen_filtrado['id'].tolist()
+    df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
+    
+    if df_mov_det_filtrado.empty or df_met_det_filtrado.empty:
         return {}
     
     # Crear diccionario de objetivos
@@ -253,57 +251,34 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
             objetivo_val = 0
         obj_dict[(tipo, familia)] = objetivo_val
     
-    # Obtener metros por equipo y familia
-    df_met_gen = pd.DataFrame(load_metros_general())
+    # Obtener familias únicas
+    familias = df_mov_det_filtrado['familia'].dropna().unique()
     
-    if año and mes:
-        df_met_gen = df_met_gen[
-            (df_met_gen['ano'] == int(año)) &
-            (df_met_gen['mes'] == mes.upper())
-        ]
+    if len(familias) == 0:
+        return {}
     
-    if fecha_desde and fecha_hasta:
-        df_met_gen = df_met_gen[
-            (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
-            (pd.to_datetime(df_met_gen['fecha']) <= pd.to_datetime(fecha_hasta))
-        ]
-    
-    if compania != "TODAS":
-        df_met_gen = df_met_gen[df_met_gen['compania'] == compania.strip()]
-    
-    met_ids = df_met_gen['id'].tolist()
-    df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
-    
-    # 🔥 CORREGIDO: Agrupar por tipo_perforacion y familia
-    # Verificar que tipo_perforacion existe
-    if 'tipo_perforacion' not in df_mov_det_filtrado.columns:
-        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
-    
-    agrupado = df_mov_det_filtrado.groupby(['tipo_perforacion', 'familia']).agg({
-        'cantidad': lambda x: x.abs().sum()
-    }).reset_index()
-    
-    # Calcular resultados por tipo y familia
+    # Preparar resultados
     resultados = []
     
-    for tipo in agrupado['tipo_perforacion'].unique():
-        df_tipo = agrupado[agrupado['tipo_perforacion'] == tipo]
-        
-        # Obtener metros para este tipo
-        met_ids_tipo = df_met_gen[df_met_gen['tipo_perforacion'] == tipo]['id'].tolist()
+    for tipo in tipos_a_usar:
+        # 🔥 Obtener metros para este tipo
+        met_tipo = df_met_gen_filtrado[df_met_gen_filtrado['tipo_perforacion'] == tipo]
+        met_ids_tipo = met_tipo['id'].tolist()
         df_met_tipo = df_met_det_filtrado[df_met_det_filtrado['registro_id'].isin(met_ids_tipo)]
         
-        total_mp_tipo = df_met_tipo['total_mp'].sum()
-        mp_rimado_tipo = df_met_tipo['mp_rimado'].sum()
+        # 🔥 Obtener movimientos para este tipo
+        df_mov_tipo = df_mov_gen_filtrado[df_mov_gen_filtrado['tipo_perforacion'] == tipo]
+        mov_ids_tipo = df_mov_tipo['id'].tolist()
+        df_mov_tipo_det = df_mov_det_filtrado[df_mov_det_filtrado['entrega_id'].isin(mov_ids_tipo)]
         
-        for _, row in df_tipo.iterrows():
-            familia = row['familia']
-            cantidad = row['cantidad']
+        for familia in familias:
+            cantidad = df_mov_tipo_det[df_mov_tipo_det['familia'] == familia]['cantidad'].sum()
             
+            # 🔥 Metros según familia
             if familia.upper() == 'RIMADORAS':
-                metros = mp_rimado_tipo
+                metros = df_met_tipo['mp_rimado'].sum()
             else:
-                metros = total_mp_tipo
+                metros = df_met_tipo['total_mp'].sum()
             
             rendimiento = metros / cantidad if cantidad > 0 else 0
             objetivo = obj_dict.get((tipo, familia), 0)
@@ -332,6 +307,9 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
         resultados_final[tipo] = df_resultado[df_resultado['Tipo_Perforacion'] == tipo].drop(columns=['Tipo_Perforacion'])
     
     return resultados_final
+
+
+
 
 # ============================================
 # FUNCIÓN: PROCESAR CONSUMOS
