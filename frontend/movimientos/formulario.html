@@ -419,55 +419,128 @@
         }
 
 
-        async function cargarDatos(id) {
-            const data = await obtenerMovimiento(id);
-            try {
+        function cargarTiposPerforacion() {
+            const tipoSelect = document.getElementById('tipo_perforacion');
+            if (!tipoSelect) return;
+            
+            const tiposUnicos = [...new Set(equiposCache.map(eq => eq.tipo_perforacion).filter(t => t))];
+            
+            // Mantener la opción "Seleccionar" y las opciones existentes
+            const currentValue = tipoSelect.value;
+            tipoSelect.innerHTML = '<option value="">Seleccionar</option>';
+            
+            // Agregar tipos únicos de equipos
+            tiposUnicos.forEach(tipo => {
+                const option = document.createElement('option');
+                option.value = tipo;
+                option.textContent = tipo;
+                tipoSelect.appendChild(option);
+            });
+            
+            // Restaurar valor si existía
+            if (currentValue) {
+                tipoSelect.value = currentValue;
+            }
+        }
 
+        async function cargarDatos(id) {
+            try {
+                // PASO 1: Obtener los datos del movimiento
+                const data = await obtenerMovimiento(id);
+                console.log('📦 Datos del movimiento:', data);
+                console.log('👤 Operador:', data.operador);
+                console.log('🔧 Equipo:', data.equipo);
+
+                // PASO 2: Primero cargar operadores y equipos
+                console.log('⏳ Cargando operadores y equipos...');
+                await cargarOperadoresYEquipos();
+                console.log('✅ Operadores y equipos cargados');
+
+                // PASO 3: Ahora sí, asignar los valores
                 document.getElementById('fecha').value = data.fecha;
                 document.getElementById('ano').value = data.ano;
                 document.getElementById('mes').value = data.mes;
                 document.getElementById('turno').value = data.turno || '';
                 document.getElementById('guia').value = data.guia || '';
                 document.getElementById('movimiento').value = data.movimiento || 'INGRESO';
-                document.getElementById('estado').value = data.estado || '';
-                document.getElementById('operador').value = data.operador || '';
-                document.getElementById('equipo').value = data.equipo || '';
-                document.getElementById('guardia').value = data.guardia || '';
-                document.getElementById('compania').value = data.compania || '';
                 document.getElementById('tipo_perforacion').value = data.tipo_perforacion || '';
+                document.getElementById('estado').value = data.estado || '';
 
-                toggleCamposSalida();
+                // ✅ IMPORTANTE: Esperar un momento para que los selects se actualicen
+                await new Promise(resolve => setTimeout(resolve, 100));
 
+                // ✅ Asignar operador y equipo
+                const operadorSelect = document.getElementById('operador');
+                const equipoSelect = document.getElementById('equipo');
+                
+                // ✅ Verificar que el valor exista en las opciones
+                let operadorEncontrado = false;
+                for (let option of operadorSelect.options) {
+                    if (option.value === data.operador) {
+                        operadorEncontrado = true;
+                        break;
+                    }
+                }
+                
+                if (operadorEncontrado) {
+                    operadorSelect.value = data.operador || '';
+                    console.log('✅ Operador asignado:', operadorSelect.value);
+                } else {
+                    console.warn('⚠️ Operador no encontrado en opciones:', data.operador);
+                    operadorSelect.value = '';
+                }
+                
+                let equipoEncontrado = false;
+                for (let option of equipoSelect.options) {
+                    if (option.value === data.equipo) {
+                        equipoEncontrado = true;
+                        break;
+                    }
+                }
+                
+                if (equipoEncontrado) {
+                    equipoSelect.value = data.equipo || '';
+                    console.log('✅ Equipo asignado:', equipoSelect.value);
+                } else {
+                    console.warn('⚠️ Equipo no encontrado en opciones:', data.equipo);
+                    equipoSelect.value = '';
+                }
+
+                // PASO 4: Actualizar campos derivados
                 actualizarGuardia();
                 actualizarCompania();
-                actualizarTipoPerforacion(); 
+                actualizarTipoPerforacion();
 
+                // Forzar el tipo_perforacion guardado
                 if (data.tipo_perforacion) {
                     document.getElementById('tipo_perforacion').value = data.tipo_perforacion;
                 }
 
+                toggleCamposSalida();
+
+                // PASO 5: Cargar detalles
                 if (data.detalles && data.detalles.length > 0) {
                     const container = document.getElementById('detallesContainer');
                     container.innerHTML = '';
                     data.detalles.forEach(d => {
-                        // ✅ AGREGAR: Convertir a positivo para edición
                         const cantidadPositiva = Math.abs(d.cantidad || 0);
                         agregarDetalle({
                             ...d,
-                            cantidad: cantidadPositiva
+                            cantidad: cantidadPositiva,
+                            familia: d.familia || ''
                         });
                     });
                 } else {
                     agregarDetalle();
                 }
 
+                console.log('✅ Movimiento cargado correctamente');
+
             } catch (error) {
-                console.error('Error al cargar:', error);
-                mostrarNotificacion('❌ Error al cargar los datos', 'danger');
+                console.error('❌ Error al cargar:', error);
+                mostrarNotificacion('❌ Error al cargar los datos: ' + error.message, 'danger');
             }
         }
-
-        
 
         async function guardarMovimiento() {
             // Validar campos obligatorios
@@ -586,59 +659,58 @@
             }
         });
 
-        async function buscarAceros() {
-            const busqueda = document.getElementById('busquedaAcero').value.trim();
-            const movimiento = document.getElementById('movimiento').value;
-            const container = document.getElementById('resultadosAceros');
 
-            if (!busqueda || busqueda.length < 2) {
-                container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Escribe al menos 2 caracteres</div>';
-                return;
-            }
-
-            container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Buscando...</div>';
-
+        async function cargarOperadoresYEquipos() {
             try {
-                const url = `${API_URL}/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`;
-                const response = await fetch(url);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // ✅ Cargar operadores
+                const responseOp = await fetch(`${API_URL}/operadores`);
+                if (!responseOp.ok) {
+                    throw new Error(`Error cargando operadores: ${responseOp.status}`);
+                }
+                operadoresCache = await responseOp.json();
+                console.log('✅ Operadores cargados:', operadoresCache.length);
+                
+                const operadorSelect = document.getElementById('operador');
+                if (operadorSelect) {
+                    operadorSelect.innerHTML = '<option value="">Seleccionar operador</option>';
+                    operadoresCache.forEach(op => {
+                        const option = document.createElement('option');
+                        option.value = op.nombre;
+                        option.textContent = op.nombre;
+                        operadorSelect.appendChild(option);
+                    });
                 }
 
-                const aceros = await response.json();
-                console.log('📦 Aceros encontrados:', aceros);
-
-                if (!aceros || aceros.length === 0) {
-                    container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">No se encontraron aceros</div>';
-                    return;
+                // ✅ Cargar equipos
+                const responseEq = await fetch(`${API_URL}/equipos`);
+                if (!responseEq.ok) {
+                    throw new Error(`Error cargando equipos: ${responseEq.status}`);
                 }
-
-                let html = '';
-                aceros.forEach(a => {
-                    const stockText = a.stock !== undefined ? `Stock: ${a.stock}` : '';
-                    // ✅ Obtener familia
-                    const familia = a.familia || '';
-                    const tipoPerforacion = a.tipo_perforacion || '';
-                    
-                    html += `
-                        <div class="resultado-acero" onclick="seleccionarAcero('${a.codigo}', '${a.descripcion}', '${familia}', '${tipoPerforacion}')" style="display:grid; grid-template-columns:1fr 2fr 0.8fr 0.5fr; gap:10px; padding:8px 10px; border-bottom:1px solid #eef1f4; align-items:center; cursor:pointer; transition:background 0.15s;">
-                            <span style="font-weight:600; color:#1a2a3a;">${a.codigo}</span>
-                            <span>${a.descripcion || a.codigo}</span>
-                            <span style="font-weight:500; ${a.stock > 0 ? 'color:#27ae60;' : 'color:#e74c3c;'}">${stockText || 'Sin stock'}</span>
-                            <button class="btn btn-success btn-sm">Seleccionar</button>
-                        </div>
-                    `;
-                });
-
-                container.innerHTML = html;
+                equiposCache = await responseEq.json();
+                console.log('✅ Equipos cargados:', equiposCache.length);
+                console.log('🔧 Ejemplo equipo:', equiposCache[0]);
+                
+                const equipoSelect = document.getElementById('equipo');
+                if (equipoSelect) {
+                    equipoSelect.innerHTML = '<option value="">Seleccionar equipo</option>';
+                    equiposCache.forEach(eq => {
+                        const option = document.createElement('option');
+                        option.value = eq.equipo;
+                        option.textContent = eq.equipo;
+                        // Guardar tipo_perforacion como atributo
+                        option.dataset.tipoPerforacion = eq.tipo_perforacion || '';
+                        equipoSelect.appendChild(option);
+                    });
+                }
+                
+                // ✅ Cargar tipos de perforación dinámicamente
+                cargarTiposPerforacion();
 
             } catch (error) {
-                console.error('❌ Error buscando aceros:', error);
-                container.innerHTML = `<div class="text-center text-danger" style="padding:20px;">❌ Error al buscar: ${error.message}</div>`;
-                mostrarNotificacion('❌ Error al buscar aceros: ' + error.message, 'danger');
+                console.error('❌ Error cargando operadores/equipos:', error);
+                mostrarNotificacion('❌ Error al cargar operadores y equipos: ' + error.message, 'danger');
             }
-        }        
+        }
 
 
         let operadoresCache = [];
