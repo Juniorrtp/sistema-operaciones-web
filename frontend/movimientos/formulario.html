@@ -645,6 +645,72 @@
             document.getElementById('modalBuscador').style.display = 'none';
         }
 
+        // ============================================================
+        // BUSCADOR DE ACEROS
+        // ============================================================
+
+        async function buscar_aceros() {
+            const busqueda = document.getElementById('busquedaAcero').value.trim();
+            const movimiento = document.getElementById('movimiento').value;
+            const container = document.getElementById('resultadosAceros');
+
+            console.log('🔍 Buscando aceros:', { busqueda, movimiento });
+
+            if (!busqueda || busqueda.length < 2) {
+                container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Escribe al menos 2 caracteres</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Buscando...</div>';
+
+            try {
+                const url = `${API_URL}/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`;
+                console.log('📡 URL:', url);
+                
+                const response = await fetch(url);
+                console.log('📡 Status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const aceros = await response.json();
+                console.log('📦 Aceros encontrados:', aceros.length);
+
+                if (!aceros || aceros.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">No se encontraron aceros</div>';
+                    return;
+                }
+
+                let html = '';
+                aceros.forEach(a => {
+                    const stockText = a.stock !== undefined ? `Stock: ${a.stock}` : '';
+                    const familia = a.familia || '';
+                    const tipoPerforacion = a.tipo_perforacion || '';
+                    
+                    const codigo = (a.codigo || '').replace(/'/g, "\\'");
+                    const descripcion = (a.descripcion || a.codigo || '').replace(/'/g, "\\'");
+                    
+                    html += `
+                        <div class="resultado-acero" onclick="seleccionarAcero('${codigo}', '${descripcion}', '${familia}', '${tipoPerforacion}')" style="display:grid; grid-template-columns:1fr 2fr 0.8fr 0.5fr; gap:10px; padding:8px 10px; border-bottom:1px solid #eef1f4; align-items:center; cursor:pointer; transition:background 0.15s;">
+                            <span style="font-weight:600; color:#1a2a3a;">${a.codigo || ''}</span>
+                            <span>${a.descripcion || a.codigo || ''}</span>
+                            <span style="font-weight:500; ${a.stock > 0 ? 'color:#27ae60;' : 'color:#e74c3c;'}">${stockText || 'Sin stock'}</span>
+                            <button class="btn btn-success btn-sm">Seleccionar</button>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error('❌ Error buscando aceros:', error);
+                container.innerHTML = `<div class="text-center text-danger" style="padding:20px;">❌ Error al buscar: ${error.message}</div>`;
+                mostrarNotificacion('❌ Error al buscar aceros: ' + error.message, 'danger');
+            }
+        }
+
+
         // Cerrar con ESC
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
