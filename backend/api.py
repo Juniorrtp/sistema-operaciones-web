@@ -6,7 +6,9 @@ from typing import List, Optional
 from datetime import datetime
 import os
 import sys
-
+from passlib.context import CryptContext
+import secrets
+from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -26,6 +28,111 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Diccionario para almacenar sesiones (se reinicia si el servidor se cae)
+sesiones = {}
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+@app.post("/api/auth/login")
+async def login(data: LoginRequest, response: Response):
+    """Inicia sesión y crea una cookie de sesión"""
+    try:
+        db = get_db()
+        
+        # Buscar usuario
+        result = db.client.table("usuarios") \
+            .select("*") \
+            .eq("username", data.username) \
+            .eq("activo", 1) \
+            .execute()
+        
+        if not result.data or len(result.data) == 0:
+            raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+        
+        user = result.data[0]
+        
+        # Verificar contraseña
+        if not verify_password(data.password, user["password"]):
+            raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+        
+        # Crear token de sesión simple
+        session_token = secrets.token_urlsafe(32)
+        sesiones[session_token] = {
+            "user_id": user["id"],
+            "username": user["username"],
+            "nombre": user["nombre"],
+            "rol": user["rol"]
+        }
+        
+        # Crear cookie con la sesión
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            max_age=86400,  # 24 horas
+            httponly=True,
+            samesite="lax",
+            secure=False  # ✅ Cambiar a True en producción con HTTPS
+        )
+        
+        return {
+            "success": True,
+            "message": "Login exitoso",
+            "user": {
+                "id": user["id"],
+                "username": user["username"],
+                "nombre": user["nombre"],
+                "rol": user["rol"]
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error en login: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/logout")
+async def logout(response: Response):
+    """Cierra sesión eliminando la cookie"""
+    response.delete_cookie("session_token")
+    return {"success": True, "message": "Sesión cerrada"}
+
+@app.get("/api/auth/me")
+async def get_current_user(request: Request):
+    """Obtiene el usuario actual desde la cookie"""
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or session_token not in sesiones:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    
+    return sesiones[session_token]
+
+# ============================================================
+# ✅ FUNCIÓN PARA PROTEGER ENDPOINTS
+# ============================================================
+
+def get_current_user_from_cookie(request: Request):
+    """Función para usar en endpoints protegidos"""
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or session_token not in sesiones:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    
+    return sesiones[session_token]
+
+
+
 
 # ============================================================
 # SERVIR ARCHIVOS ESTÁTICOS (Frontend)
@@ -50,10 +157,20 @@ if os.path.exists(os.path.join(FRONTEND_DIR, "stock")):
     app.mount("/stock", StaticFiles(directory=os.path.join(FRONTEND_DIR, "stock")), name="stock")
 
 
-
 @app.get("/")
-async def servir_index():
-    """Sirve la página principal"""
+async def servir_index(request: Request):
+    """Sirve la página principal o redirige a login"""
+    # ✅ Verificar si tiene sesión
+    session_token = request.cookies.get("session_token")
+    
+    if not session_token or session_token not in sesiones:
+        # Si no tiene sesión, redirigir a login
+        login_path = os.path.join(FRONTEND_DIR, "login.html")
+        if os.path.exists(login_path):
+            return FileResponse(login_path)
+        return {"error": "login.html no encontrado"}
+    
+    # Si tiene sesión, mostrar index
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)

@@ -1,80 +1,107 @@
-"""
-Dashboard Principal - Sistema de Operaciones
-Equivalente a la aplicación principal en PyQt6
-"""
-
 import streamlit as st
-from datetime import datetime
+from utils.styles import apply_custom_styles
+# ============================================
+# CONFIGURACIÓN DE PÁGINA
+# ============================================
 
-from utils.api_client import APIClient
-from components.filtros import PanelFiltros
-from views import rendimiento
-
-# Configuración de la página
 st.set_page_config(
-    page_title="Sistema de Operaciones",
-    page_icon="📊",
+    page_title="Sistema de Operaciones - Control de Aceros",
+    page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ============================================================
-# INICIALIZACIÓN
-# ============================================================
+apply_custom_styles()
+# ============================================
+# ESTILOS CSS PARA PERSONALIZAR EL SIDEBAR
+# ============================================
 
-@st.cache_resource
-def get_api_client():
-    return APIClient()
 
-api = get_api_client()
-
-# ============================================================
-# SIDEBAR - FILTROS (PanelFiltros en PyQt6)
-# ============================================================
+# ============================================
+# CONTENIDO DEL SIDEBAR (USANDO EL NATIVO)
+# ============================================
 
 with st.sidebar:
-    st.title("🎯 Sistema de Operaciones")
+    # Título personalizado
+    st.markdown("""
+        <div class="sidebar-title">
+            🏗️ SISTEMA DE<br>OPERACIONES
+            <small>Control de Aceros</small>
+        </div>
+        <hr class="sidebar-divider">
+    """, unsafe_allow_html=True)
+    
+    # El menú de radio se crea automáticamente con las páginas
+    # Solo agregamos contenido adicional después
+    
+    # Separador
     st.markdown("---")
     
-    filtros = PanelFiltros(api)
-    filtros.render()
+    # Estado de conexión
+    try:
+        import requests
+        api_url = st.secrets.get("API_URL", "https://sistema-operaciones-web.onrender.com")
+        response = requests.get(f"{api_url}/api/movimientos?limit=1", timeout=5)
+        if response.status_code == 200:
+            st.markdown("""
+                <div class="connection-status online">
+                    🟢 API Conectada
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div class="connection-status offline">
+                    🟡 API no disponible
+                </div>
+            """, unsafe_allow_html=True)
+    except:
+        st.markdown("""
+            <div class="connection-status offline">
+                🔴 Error de conexión
+            </div>
+        """, unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.caption(f"v1.0 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    # Versión
+    st.markdown("""
+        <div class="sidebar-version">
+            v1.0.0 · 2026
+        </div>
+    """, unsafe_allow_html=True)
 
-# ============================================================
-# MAIN - TABS (RendimientoWidget en PyQt6)
-# ============================================================
+# ============================================
+# CONTENIDO PRINCIPAL
+# ============================================
 
-st.title("📊 Dashboard de Operaciones")
+st.title("🏗️ Sistema de Operaciones")
+st.markdown("---")
 
-# Crear tabs
-tabs = st.tabs([
-    "📈 Rendimiento",
-    "📦 Consumo",
-    "📋 Estado Stock",
-    "📅 Avance Semanal",
-    "📄 Reporte Gerencial"
-])
+st.markdown("""
+### 📋 Bienvenido al Sistema de Control de Aceros y Perforación
 
-# TAB 1: RENDIMIENTO (RendimientoWidget)
-with tabs[0]:
-    # Obtener filtros actualizados como diccionario
-    filtros_dict = filtros.obtener_filtros_dict()
-    rendimiento.render(api, filtros_dict)
+Este sistema te permite gestionar y analizar:
 
-# TAB 2: CONSUMO (en desarrollo)
-with tabs[1]:
-    st.info("🚧 Módulo de Consumo en desarrollo")
+- 📊 **Dashboard** - Resumen ejecutivo con KPIs principales
+- 🏆 **Rendimiento** - Análisis de aceros y operadores
+- 🚜 **Equipos** - Estado y consumo por equipo
+- 📅 **Avance Semanal** - Reporte gerencial de consumo y metros
+- 📈 **Reporte Gerencial** - Análisis detallado para la gerencia
 
-# TAB 3: ESTADO STOCK (en desarrollo)
-with tabs[2]:
-    st.info("🚧 Módulo de Estado de Stock en desarrollo")
+---
 
-# TAB 4: AVANCE SEMANAL (en desarrollo)
-with tabs[3]:
-    st.info("🚧 Módulo de Avance Semanal en desarrollo")
+### 🚀 ¿Cómo usar el sistema?
 
-# TAB 5: REPORTE GERENCIAL (en desarrollo)
-with tabs[4]:
-    st.info("🚧 Módulo de Reporte Gerencial en desarrollo")
+1. **Selecciona una página** en el menú lateral izquierdo
+2. **Aplica filtros** para ajustar los datos
+3. **Visualiza** las tablas y gráficos
+4. **Exporta** los reportes a Excel si lo necesitas
+
+---
+
+### 📊 Estado del sistema
+
+- ✅ Módulo de Rendimiento completo
+- ✅ Módulo de Equipos completo
+- ✅ Avance Semanal completo
+- 🚧 Dashboard en construcción
+- 🚧 Reporte Gerencial en construcción
+""")
