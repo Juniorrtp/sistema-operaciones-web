@@ -253,26 +253,42 @@ async def crear_movimiento(data: MovimientoCreate):
 async def actualizar_movimiento(id: int, data: MovimientoUpdate):
     try:
         db = get_db()
+        
+        # Obtener todos los campos que vienen en la actualización
         data_dict = {k: v for k, v in data.dict().items() if v is not None}
+        
+        # Extraer detalles si vienen
         detalles = data_dict.pop('detalles', None)
         
+        # Actualizar cabecera
         if data_dict:
             db.client.table("movimiento_general").update(data_dict).eq("id", id).execute()
+            print(f"📝 Cabecera actualizada: {data_dict}")
         
+        # Actualizar detalles si se enviaron
         if detalles is not None:
+            # Eliminar detalles viejos
             db.client.table("movimiento_detalles").delete().eq("entrega_id", id).execute()
+            
+            # Obtener el movimiento para saber si es SALIDA
             movimiento = data_dict.get('movimiento', 'INGRESO')
             es_salida = movimiento == "SALIDA"
             
+            # Insertar detalles nuevos
             for detalle in detalles:
-                nuevo_detalle = detalle.dict()
+                # ✅ detalle YA ES un diccionario, no usar .dict()
+                nuevo_detalle = detalle  # Ya es un dict
                 nuevo_detalle['entrega_id'] = id
+                
+                # Si es SALIDA, convertir a negativo
                 if es_salida:
                     nuevo_detalle['cantidad'] = -abs(nuevo_detalle['cantidad'])
                 else:
                     nuevo_detalle['cantidad'] = abs(nuevo_detalle['cantidad'])
+                
                 db.client.table("movimiento_detalles").insert(nuevo_detalle).execute()
             
+            # Actualizar cache de stock
             actualizar_cache_stock()
         
         return {"success": True}
@@ -281,6 +297,7 @@ async def actualizar_movimiento(id: int, data: MovimientoUpdate):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/api/movimientos/{id}")
 async def eliminar_movimiento(id: int):
