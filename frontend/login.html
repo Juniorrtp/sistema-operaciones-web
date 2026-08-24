@@ -32,6 +32,12 @@
             font-size: 48px;
             margin-bottom: 16px;
         }
+        .error-msg {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 8px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -43,16 +49,16 @@
     <form id="loginForm" onsubmit="event.preventDefault(); login();">
         <div class="mb-3">
             <label class="form-label">Usuario</label>
-            <input type="text" id="username" class="form-control" placeholder="Usuario" required>
+            <input type="text" id="username" class="form-control" placeholder="Usuario" required autofocus>
         </div>
         <div class="mb-3">
             <label class="form-label">Contraseña</label>
             <input type="password" id="password" class="form-control" placeholder="••••••••" required>
         </div>
         
-        <div id="errorMsg" class="text-danger text-center mb-3" style="display:none;"></div>
+        <div id="errorMsg" class="error-msg" style="display:none;"></div>
         
-        <button type="submit" class="btn btn-primary w-100">Iniciar Sesión</button>
+        <button type="submit" id="loginBtn" class="btn btn-primary w-100">Iniciar Sesión</button>
     </form>
     
     <div class="text-center mt-3">
@@ -61,47 +67,143 @@
 </div>
 
 <script>
-    // URL de la API
+    // ============================================================
+    // CONFIGURACIÓN
+    // ============================================================
+    
     const API_URL = window.location.hostname === 'localhost' 
         ? 'http://localhost:8000/api' 
         : 'https://sistema-operaciones-web.onrender.com/api';
 
+    console.log('🌐 API URL:', API_URL);
+
+    // ============================================================
+    // FUNCIÓN DE LOGIN (MEJORADA)
+    // ============================================================
 
     async function login() {
-        const username = document.getElementById('username').value;
+        const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
         const errorMsg = document.getElementById('errorMsg');
+        const loginBtn = document.getElementById('loginBtn');
         
+        // Resetear mensaje de error
         errorMsg.style.display = 'none';
         errorMsg.textContent = '';
 
+        // ✅ Validar campos
+        if (!username || !password) {
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = '❌ Usuario y contraseña son obligatorios';
+            return;
+        }
+
+        // ✅ Deshabilitar botón para evitar múltiples envíos
+        loginBtn.disabled = true;
+        loginBtn.textContent = '⏳ Verificando...';
+
         try {
+            console.log(`📡 Intentando login para usuario: "${username}"`);
+            
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ username, password }),
-                credentials: 'include'  // ✅ Importante para guardar cookies
+                credentials: 'include'
             });
 
-            const data = await response.json();
+            // ✅ LEER RESPUESTA COMO TEXTO PRIMERO
+            const textResponse = await response.text();
+            console.log('📦 Respuesta del servidor:', textResponse);
 
-            if (!response.ok) {
-                throw new Error(data.detail || 'Error al iniciar sesión');
+            // ✅ Intentar parsear JSON
+            let data = null;
+            if (textResponse) {
+                try {
+                    data = JSON.parse(textResponse);
+                    console.log('✅ JSON parseado:', data);
+                } catch (parseError) {
+                    console.error('❌ No es JSON válido:', textResponse);
+                    throw new Error('El servidor devolvió una respuesta inesperada (no es JSON)');
+                }
             }
 
-            // ✅ LOGIN EXITOSO - Redirigir
+            // ✅ Verificar si la respuesta fue exitosa
+            if (!response.ok) {
+                const errorDetail = data?.detail || `Error HTTP ${response.status}`;
+                console.error('❌ Error HTTP:', response.status, errorDetail);
+                throw new Error(errorDetail);
+            }
+
+            // ✅ LOGIN EXITOSO
             console.log('✅ Login exitoso:', data);
-            window.location.href = '/';  // ✅ Esta es la línea clave
+            
+            // Verificar que la cookie se creó
+            console.log('🍪 Cookies actuales:', document.cookie);
+
+            // ✅ REDIRIGIR - Usar replace para no guardar en historial
+            window.location.replace('/');
 
         } catch (error) {
+            console.error('❌ Error en login:', error);
             errorMsg.style.display = 'block';
             errorMsg.textContent = '❌ ' + error.message;
+            
+            // ✅ Rehabilitar botón
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Iniciar Sesión';
         }
     }
 
+    // ============================================================
+    // VERIFICAR AUTENTICACIÓN AL CARGAR
+    // ============================================================
 
+    async function checkAuth() {
+        try {
+            console.log('🔍 Verificando autenticación...');
+            const response = await fetch(`${API_URL}/auth/me`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const user = await response.json();
+                console.log('✅ Usuario ya autenticado:', user);
+                window.location.replace('/');
+            } else {
+                console.log('ℹ️ No autenticado, mostrando login');
+            }
+        } catch (error) {
+            console.log('ℹ️ Error verificando autenticación:', error.message);
+        }
+    }
+
+    // ============================================================
+    // EJECUTAR AL CARGAR LA PÁGINA
+    // ============================================================
+
+    // Verificar autenticación al cargar
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Página de login cargada');
+        checkAuth();
+        
+        // ✅ Permitir login con Enter (ya está con onsubmit)
+        // ✅ Enfocar el campo usuario automáticamente
+        document.getElementById('username').focus();
+    });
+
+    // ============================================================
+    // EXPONER FUNCIONES PARA DEPURACIÓN
+    // ============================================================
+
+    // Hacer login() accesible desde la consola
+    window.login = login;
+    window.API_URL = API_URL;
+
+    console.log('🔧 Funciones disponibles en consola: login(), checkAuth()');
+    console.log('🌐 API_URL:', API_URL);
 </script>
 
 </body>
