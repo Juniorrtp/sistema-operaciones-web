@@ -213,13 +213,27 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
     if df_mov_det_filtrado.empty:
         return {}
     
-    # Unir con generales para obtener equipo y tipo_perforacion
+    # 🔥 CORREGIDO: Unir con generales para obtener equipo y tipo_perforacion
+    # Verificar qué columnas existen en df_mov_gen
+    columnas_a_traer = ['id']
+    if 'equipo' in df_mov_gen.columns:
+        columnas_a_traer.append('equipo')
+    if 'tipo_perforacion' in df_mov_gen.columns:
+        columnas_a_traer.append('tipo_perforacion')
+    
     df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen[['id', 'equipo', 'tipo_perforacion']],
+        df_mov_gen[columnas_a_traer],
         left_on='entrega_id',
         right_on='id',
         how='left'
     )
+    
+    # Si 'tipo_perforacion' no existe, crearla con valor por defecto
+    if 'tipo_perforacion' not in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
+    
+    if 'equipo' not in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['equipo'] = 'SIN_EQUIPO'
     
     # Filtrar solo familias target
     df_mov_det_filtrado = df_mov_det_filtrado[
@@ -248,7 +262,7 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
             (df_met_gen['mes'] == mes.upper())
         ]
     
-    if fecha_desde and fecha_hasta:
+    if fecha_desde y fecha_hasta:
         df_met_gen = df_met_gen[
             (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
             (pd.to_datetime(df_met_gen['fecha']) <= pd.to_datetime(fecha_hasta))
@@ -260,7 +274,11 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
     met_ids = df_met_gen['id'].tolist()
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    # Agrupar por tipo_perforacion, familia
+    # 🔥 CORREGIDO: Agrupar por tipo_perforacion y familia
+    # Verificar que tipo_perforacion existe
+    if 'tipo_perforacion' not in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
+    
     agrupado = df_mov_det_filtrado.groupby(['tipo_perforacion', 'familia']).agg({
         'cantidad': lambda x: x.abs().sum()
     }).reset_index()
@@ -314,6 +332,7 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
         resultados_final[tipo] = df_resultado[df_resultado['Tipo_Perforacion'] == tipo].drop(columns=['Tipo_Perforacion'])
     
     return resultados_final
+
 # ============================================
 # FUNCIÓN: PROCESAR CONSUMOS
 # ============================================
