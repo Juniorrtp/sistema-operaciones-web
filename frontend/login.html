@@ -66,6 +66,7 @@
         ? 'http://localhost:8000/api' 
         : 'https://sistema-operaciones-web.onrender.com/api';
 
+
     async function login() {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
@@ -90,14 +91,17 @@
                 throw new Error(data.detail || 'Error al iniciar sesión');
             }
 
-            // ✅ Redirigir al dashboard
-            window.location.href = '/';
+            // ✅ LOGIN EXITOSO - Redirigir
+            console.log('✅ Login exitoso:', data);
+            window.location.href = '/';  // ✅ Esta es la línea clave
 
         } catch (error) {
             errorMsg.style.display = 'block';
             errorMsg.textContent = '❌ ' + error.message;
         }
     }
+
+
 </script>
 
 </body>
