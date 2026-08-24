@@ -257,12 +257,7 @@
                         
                         <div class="form-group" style="margin-top:12px;">
                             <label>Tipo Perforación *</label>
-                            <select id="tipo_perforacion" class="form-select" required>
-                                <option value="">Seleccionar</option>
-                                <option value="DIAMANTINA">DIAMANTINA</option>
-                                <option value="ROTATIVA">ROTATIVA</option>
-                                <option value="PERCUSION">PERCUSION</option>
-                            </select>
+                            <input type="text" id="tipo_perforacion" class="form-control" required placeholder="Tipo de perforación" readonly>
                             <small class="text-muted">Se actualiza automáticamente al seleccionar un equipo</small>
                         </div>
 
@@ -369,7 +364,7 @@
             const row = document.createElement('div');
             row.className = 'detalle-row';
             row.dataset.familia = datos?.familia || '';
-
+            row.dataset.tipoPerforacion = datos?.tipo_perforacion || '';
             row.innerHTML = `
                 <select class="form-select form-select-sm brazo-select">
                     <option value="">Brazo</option>
@@ -596,8 +591,6 @@
             const movimiento = document.getElementById('movimiento').value;
             const container = document.getElementById('resultadosAceros');
 
-            console.log('🔍 Buscando:', { busqueda, movimiento });
-
             if (!busqueda || busqueda.length < 2) {
                 container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">Escribe al menos 2 caracteres</div>';
                 return;
@@ -607,17 +600,14 @@
 
             try {
                 const url = `${API_URL}/aceros?q=${encodeURIComponent(busqueda)}&movimiento=${movimiento}`;
-                console.log('📡 URL:', url);
-                
                 const response = await fetch(url);
-                console.log('📡 Status:', response.status);
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const aceros = await response.json();
-                console.log('📦 Aceros encontrados:', aceros.length);
+                console.log('📦 Aceros encontrados:', aceros);
 
                 if (!aceros || aceros.length === 0) {
                     container.innerHTML = '<div class="text-center text-muted" style="padding:20px;">No se encontraron aceros</div>';
@@ -627,8 +617,12 @@
                 let html = '';
                 aceros.forEach(a => {
                     const stockText = a.stock !== undefined ? `Stock: ${a.stock}` : '';
+                    // ✅ Obtener familia
+                    const familia = a.familia || '';
+                    const tipoPerforacion = a.tipo_perforacion || '';
+                    
                     html += `
-                        <div class="resultado-acero" onclick="seleccionarAcero('${a.codigo}', '${a.descripcion}')" style="display:grid; grid-template-columns:1fr 2fr 0.8fr 0.5fr; gap:10px; padding:8px 10px; border-bottom:1px solid #eef1f4; align-items:center; cursor:pointer; transition:background 0.15s;">
+                        <div class="resultado-acero" onclick="seleccionarAcero('${a.codigo}', '${a.descripcion}', '${familia}', '${tipoPerforacion}')" style="display:grid; grid-template-columns:1fr 2fr 0.8fr 0.5fr; gap:10px; padding:8px 10px; border-bottom:1px solid #eef1f4; align-items:center; cursor:pointer; transition:background 0.15s;">
                             <span style="font-weight:600; color:#1a2a3a;">${a.codigo}</span>
                             <span>${a.descripcion || a.codigo}</span>
                             <span style="font-weight:500; ${a.stock > 0 ? 'color:#27ae60;' : 'color:#e74c3c;'}">${stockText || 'Sin stock'}</span>
@@ -644,8 +638,7 @@
                 container.innerHTML = `<div class="text-center text-danger" style="padding:20px;">❌ Error al buscar: ${error.message}</div>`;
                 mostrarNotificacion('❌ Error al buscar aceros: ' + error.message, 'danger');
             }
-        }
-
+        }        
 
 
         let operadoresCache = [];
@@ -690,7 +683,7 @@
         }  
 
 
-        function seleccionarAcero(codigo, descripcion) {
+        function seleccionarAcero(codigo, descripcion, familia = '', tipoPerforacion = '') {
             // Buscar un detalle vacío para llenar
             const rows = document.querySelectorAll('#detallesContainer .detalle-row');
             let filaEncontrada = null;
@@ -707,38 +700,55 @@
             }
 
             if (filaEncontrada) {
+                // ✅ Guardar familia en el dataset
+                filaEncontrada.dataset.familia = familia;
+                filaEncontrada.dataset.tipoPerforacion = tipoPerforacion;
+                
                 filaEncontrada.querySelector('.codigo-input').value = codigo;
                 filaEncontrada.querySelector('.descripcion-input').value = descripcion;
                 filaEncontrada.querySelector('.cantidad-input').focus();
+                
+                console.log(`✅ Acero seleccionado - Familia: ${familia}, Tipo: ${tipoPerforacion}`);
             } else {
                 // Crear nueva fila con los datos
-                agregarDetalle({ codigo: codigo, descripcion: descripcion, cantidad: 0 });
+                agregarDetalle({ 
+                    codigo: codigo, 
+                    descripcion: descripcion, 
+                    cantidad: 0,
+                    familia: familia
+                });
+                
                 const rows2 = document.querySelectorAll('#detallesContainer .detalle-row');
                 const lastRow = rows2[rows2.length - 1];
+                lastRow.dataset.familia = familia;
+                lastRow.dataset.tipoPerforacion = tipoPerforacion;
                 lastRow.querySelector('.codigo-input').value = codigo;
                 lastRow.querySelector('.descripcion-input').value = descripcion;
                 lastRow.querySelector('.cantidad-input').focus();
             }
 
             cerrarBuscador();
-            mostrarNotificacion(`✅ Acero seleccionado: ${codigo} - ${descripcion}`);
+            mostrarNotificacion(`✅ Acero seleccionado: ${codigo} - ${descripcion} (Familia: ${familia || 'Sin familia'})`);
         }
+
 
 
         function actualizarTipoPerforacion() {
             const equipoSelect = document.getElementById('equipo');
-            const tipoPerforacionSelect = document.getElementById('tipo_perforacion');
+            const tipoPerforacionInput = document.getElementById('tipo_perforacion');
             const equipoNombre = equipoSelect.value;
             
-            if (!equipoNombre) return;
+            if (!equipoNombre) {
+                tipoPerforacionInput.value = '';
+                return;
+            }
             
             const equipo = equiposCache.find(eq => eq.equipo === equipoNombre);
             if (equipo && equipo.tipo_perforacion) {
-                tipoPerforacionSelect.value = equipo.tipo_perforacion;
+                tipoPerforacionInput.value = equipo.tipo_perforacion;
                 console.log(`🔄 Tipo perforación actualizado: ${equipo.tipo_perforacion}`);
             } else {
-                // Si no tiene tipo_perforacion, dejar en blanco
-                tipoPerforacionSelect.value = '';
+                tipoPerforacionInput.value = '';
             }
         }
 
