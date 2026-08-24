@@ -3,14 +3,20 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import requests
 import logging
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 from utils.styles import apply_custom_styles
-
+from utils.api_client import (
+    fetch_from_api,
+    load_movimientos_general,
+    load_movimientos_detalles,
+    load_metros_general,
+    load_metros_detalles,
+    load_stock_from_api
+)
 # Aplicar estilos personalizados
 apply_custom_styles()
 # Configurar logging
@@ -94,21 +100,7 @@ def crear_tabla_html(df, titulo=None):
 # FUNCIONES DE CONEXIÓN A API
 # ============================================
 
-@st.cache_resource
-def get_api_session():
-    session = requests.Session()
-    return session
 
-def fetch_from_api(endpoint, params=None):
-    try:
-        base_url = st.secrets.get("API_URL", "https://sistema-operaciones-web.onrender.com")
-        url = f"{base_url}/api/{endpoint}"
-        response = get_api_session().get(url, params=params, timeout=60)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"❌ Error al conectar con la API: {e}")
-        return []
 
 # ============================================
 # CARGA DE DATOS CON CACHÉ

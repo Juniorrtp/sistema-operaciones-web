@@ -3,13 +3,20 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import requests
 import logging
 import io
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 from utils.styles import apply_custom_styles
+from utils.api_client import (
+    fetch_from_api,
+    load_movimientos_general,
+    load_movimientos_detalles,
+    load_metros_general,
+    load_metros_detalles,
+    load_stock_from_api,
+    load_objetivos,
+    load_aceros
+)
 
 # Aplicar estilos personalizados
 apply_custom_styles()
@@ -17,90 +24,6 @@ apply_custom_styles()
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# ============================================
-# FUNCIONES DE CONEXIÓN A API
-# ============================================
-
-@st.cache_resource
-def get_api_session():
-    session = requests.Session()
-    return session
-
-def fetch_from_api(endpoint, params=None):
-    try:
-        base_url = st.secrets.get("API_URL", "https://sistema-operaciones-web.onrender.com")
-        url = f"{base_url}/api/{endpoint}"
-        response = get_api_session().get(url, params=params, timeout=60)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        st.error(f"❌ Error al conectar con la API: {e}")
-        return []
-
-# ============================================
-# CARGA DE DATOS CON CACHÉ
-# ============================================
-
-@st.cache_data(ttl=300)
-def load_movimientos_general(fecha_desde=None, fecha_hasta=None):
-    params = {"limit": 5000}
-    if fecha_desde:
-        params["fecha_desde"] = fecha_desde
-    if fecha_hasta:
-        params["fecha_hasta"] = fecha_hasta
-    
-    data = fetch_from_api("movimientos", params)
-    
-    if data:
-        for row in data:
-            if 'compania' in row and row['compania']:
-                row['compania'] = row['compania'].strip()
-            if 'tipo_perforacion' in row and row['tipo_perforacion']:
-                row['tipo_perforacion'] = row['tipo_perforacion'].strip()
-            if 'mes' in row and row['mes']:
-                row['mes'] = row['mes'].strip().upper()
-            if 'movimiento' in row and row['movimiento']:
-                row['movimiento'] = row['movimiento'].strip().upper()
-            if 'estado' in row and row['estado']:
-                row['estado'] = row['estado'].strip().upper()
-    return data
-
-@st.cache_data(ttl=300)
-def load_movimientos_detalles():
-    return fetch_from_api("detalles-movimientos")
-
-@st.cache_data(ttl=300)
-def load_metros_general(fecha_desde=None, fecha_hasta=None):
-    params = {"limit": 5000}
-    if fecha_desde:
-        params["fecha_desde"] = fecha_desde
-    if fecha_hasta:
-        params["fecha_hasta"] = fecha_hasta
-    
-    data = fetch_from_api("metros", params)
-    
-    if data:
-        for row in data:
-            if 'compania' in row and row['compania']:
-                row['compania'] = row['compania'].strip()
-            if 'tipo_perforacion' in row and row['tipo_perforacion']:
-                row['tipo_perforacion'] = row['tipo_perforacion'].strip()
-            if 'mes' in row and row['mes']:
-                row['mes'] = row['mes'].strip().upper()
-    return data
-
-@st.cache_data(ttl=300)
-def load_metros_detalles():
-    return fetch_from_api("metros-detalles")
-
-@st.cache_data(ttl=600)
-def load_stock_from_api():
-    return fetch_from_api("stock")
-
-@st.cache_data(ttl=3600)
-def load_objetivos():
-    return fetch_from_api("objetivos")
 
 # ============================================
 # FUNCIÓN PARA CREAR TABLAS HTML
@@ -126,7 +49,6 @@ def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
     html += '<thead>'
     html += '<tr style="background:linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">'
     for col in columnas:
-        # Ancho más estrecho para columnas específicas
         if columnas_estrechas and col in columnas_estrechas:
             html += f'<th style="color:#ffffff; font-weight:bold; font-size:11px; text-align:center; padding:5px 8px; border:1px solid #1a252f; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; min-width:60px;">{col}</th>'
         else:
@@ -143,7 +65,6 @@ def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
         for col in columnas:
             valor = row[col]
             
-            # Estilo según columna
             if col == 'Guardia':
                 estilo = 'text-align:center; font-weight:600;'
             elif col == 'Familia':
@@ -153,7 +74,6 @@ def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
             else:
                 estilo = 'text-align:left;'
             
-            # Formatear valores
             if isinstance(valor, (int, float)):
                 if col in ['Metros', 'Rendimiento', 'Objetivo']:
                     valor_display = f'{valor:,.2f}'
@@ -162,7 +82,6 @@ def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
             else:
                 valor_display = valor
             
-            # Ancho para columnas estrechas
             if columnas_estrechas and col in columnas_estrechas:
                 html += f'<td style="padding:4px 6px; border:1px solid #bdc3c7; color:#2c3e50; font-size:12px; text-align:center; {estilo}">{valor_display}</td>'
             else:
@@ -179,10 +98,11 @@ def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
 # ============================================
 # FUNCIONES DE PROCESAMIENTO
 # ============================================
+
 def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
     """Calcula KPIs para el reporte"""
     
-    # Total Metros
+    # 🔥 Usar funciones importadas de api_client
     df_met_gen = pd.DataFrame(load_metros_general())
     df_met_filtrado = df_met_gen[
         (df_met_gen['ano'] == int(año)) &
@@ -221,14 +141,12 @@ def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
     
     # Stock Crítico
     stock_data = load_stock_from_api()
-    aceros = fetch_from_api("aceros")
+    aceros = load_aceros()
     
-    # 🔧 CORREGIDO: Manejar valores None en minimo
     minimos = {}
     for a in aceros:
         codigo = a.get('codigo', '')
         minimo = a.get('minimo', 10)
-        # Si minimo es None o no es un número, usar 10 como default
         if minimo is None or not isinstance(minimo, (int, float)):
             minimo = 10
         minimos[codigo] = minimo
@@ -238,7 +156,6 @@ def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
         codigo = item.get('codigo', '')
         stock = item.get('stock', 0)
         minimo = minimos.get(codigo, 10)
-        # Asegurar que stock y minimo son números
         if stock is None:
             stock = 0
         if minimo is None:
@@ -246,7 +163,7 @@ def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
         if stock < minimo and stock > 0:
             stock_critico += 1
     
-    # Cumplimiento de Metas (ejemplo con objetivo de 1000m)
+    # Cumplimiento de Metas
     objetivo_mensual = 1000
     cumplimiento = (total_metros / objetivo_mensual * 100) if objetivo_mensual > 0 else 0
     
@@ -266,6 +183,7 @@ def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compan
     
     familias_target = ['SHANK', 'ACOPLES', 'BARRAS', 'RIMADORAS']
     
+    # Cargar datos
     mov_detalles = load_movimientos_detalles()
     met_detalles = load_metros_detalles()
     mov_general = load_movimientos_general(fecha_desde, fecha_hasta)
@@ -306,17 +224,9 @@ def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compan
     if df_mov_det_filtrado.empty:
         return {}
     
-    # 🔧 CORREGIDO: Unir con generales para obtener columnas faltantes
-    # Asegurar que traemos todas las columnas necesarias
-    columnas_necesarias = ['id', 'equipo', 'tipo_perforacion']
-    # Verificar que las columnas existen en df_mov_gen
-    columnas_existentes = [col for col in columnas_necesarias if col in df_mov_gen.columns]
-    
-    if not columnas_existentes:
-        return {}
-    
+    # 🔥 CORREGIDO: Unir con generales
     df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen[columnas_existentes],
+        df_mov_gen[['id', 'equipo', 'tipo_perforacion']],
         left_on='entrega_id',
         right_on='id',
         how='left'
@@ -330,8 +240,14 @@ def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compan
     if df_mov_det_filtrado.empty:
         return {}
     
-    # 🔧 VERIFICAR: Mostrar columnas disponibles si hay error
-    # logger.info(f"Columnas en df_mov_det_filtrado: {df_mov_det_filtrado.columns.tolist()}")
+    # 🔥 CORREGIDO: Usar 'tipo_perforacion_y' que es la que viene de df_mov_gen
+    # O simplemente renombrar para simplificar
+    if 'tipo_perforacion_y' in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = df_mov_det_filtrado['tipo_perforacion_y']
+    elif 'tipo_perforacion_x' in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = df_mov_det_filtrado['tipo_perforacion_x']
+    else:
+        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
     
     # Crear diccionario de objetivos
     obj_dict = {}
@@ -364,26 +280,17 @@ def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compan
     met_ids = df_met_gen['id'].tolist()
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    # 🔧 CORREGIDO: Verificar que las columnas existen antes de agrupar
-    columnas_agrupar = ['tipo_perforacion', 'equipo', 'familia']
-    columnas_existentes_agrupar = [col for col in columnas_agrupar if col in df_mov_det_filtrado.columns]
-    
-    if not columnas_existentes_agrupar:
-        return {}
-    
-    # Agrupar por tipo_perforacion, equipo, familia
-    agrupado = df_mov_det_filtrado.groupby(columnas_existentes_agrupar).agg({
+    # 🔥 CORREGIDO: Agrupar por tipo_perforacion (la nueva columna), equipo, familia
+    agrupado = df_mov_det_filtrado.groupby(['tipo_perforacion', 'equipo', 'familia']).agg({
         'cantidad': lambda x: x.abs().sum()
     }).reset_index()
-    
-    # 🔧 CORREGIDO: Si 'tipo_perforacion' no existe, usar un valor por defecto
-    if 'tipo_perforacion' not in agrupado.columns:
-        agrupado['tipo_perforacion'] = 'GENERAL'
     
     # Calcular metros por equipo
     resultados = {}
     
-    for tipo in agrupado['tipo_perforacion'].unique():
+    tipos = agrupado['tipo_perforacion'].unique()
+    
+    for tipo in tipos:
         df_tipo = agrupado[agrupado['tipo_perforacion'] == tipo]
         resultados[tipo] = {}
         
@@ -394,16 +301,18 @@ def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compan
             met_ids_equipo = df_met_gen[df_met_gen['equipo'] == equipo]['id'].tolist()
             df_met_equipo = df_met_det_filtrado[df_met_det_filtrado['registro_id'].isin(met_ids_equipo)]
             
+            total_mp_equipo = df_met_equipo['total_mp'].sum()
+            mp_rimado_equipo = df_met_equipo['mp_rimado'].sum()
+            
             filas = []
             for _, row in df_equipo.iterrows():
                 familia = row['familia']
                 cantidad = row['cantidad']
                 
-                # Calcular metros según familia
                 if familia.upper() == 'RIMADORAS':
-                    metros = df_met_equipo['mp_rimado'].sum()
+                    metros = mp_rimado_equipo
                 else:
-                    metros = df_met_equipo['total_mp'].sum()
+                    metros = total_mp_equipo
                 
                 rendimiento = metros / cantidad if cantidad > 0 else 0
                 objetivo = obj_dict.get((tipo, familia), 0)
@@ -421,11 +330,14 @@ def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compan
     
     return resultados
 
+
 @st.cache_data(ttl=300)
 def process_consumo_brocas_operador(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
-    """Procesa consumo de BROCAS por operador - solo Cantidad"""
+    """Procesa consumo de BROCAS por operador - con Metros y Rendimiento"""
     
+    # Cargar datos
     mov_detalles = load_movimientos_detalles()
+    met_detalles = load_metros_detalles()
     mov_general = load_movimientos_general(fecha_desde, fecha_hasta)
     
     if not mov_general or not mov_detalles:
@@ -433,6 +345,7 @@ def process_consumo_brocas_operador(fecha_desde, fecha_hasta, año=None, mes=Non
     
     df_mov_gen = pd.DataFrame(mov_general)
     df_mov_det = pd.DataFrame(mov_detalles)
+    df_met_det = pd.DataFrame(met_detalles)
     
     # Filtrar movimientos generales
     if año and mes:
@@ -462,20 +375,21 @@ def process_consumo_brocas_operador(fecha_desde, fecha_hasta, año=None, mes=Non
     if df_mov_det_filtrado.empty:
         return {}
     
-    # 🔧 CORREGIDO: Unir con generales para obtener columnas faltantes
-    # Verificar qué columnas existen en df_mov_gen
-    columnas_necesarias = ['id', 'operador', 'guardia', 'tipo_perforacion']
-    columnas_existentes = [col for col in columnas_necesarias if col in df_mov_gen.columns]
-    
-    if not columnas_existentes:
-        return {}
-    
+    # Unir con generales para obtener operador, guardia, tipo_perforacion
     df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen[columnas_existentes],
+        df_mov_gen[['id', 'operador', 'guardia', 'tipo_perforacion']],
         left_on='entrega_id',
         right_on='id',
         how='left'
     )
+    
+    # Renombrar tipo_perforacion
+    if 'tipo_perforacion_y' in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = df_mov_det_filtrado['tipo_perforacion_y']
+    elif 'tipo_perforacion_x' in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = df_mov_det_filtrado['tipo_perforacion_x']
+    else:
+        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
     
     # Filtrar solo BROCAS
     df_mov_det_filtrado = df_mov_det_filtrado[
@@ -485,26 +399,70 @@ def process_consumo_brocas_operador(fecha_desde, fecha_hasta, año=None, mes=Non
     if df_mov_det_filtrado.empty:
         return {}
     
-    # 🔧 CORREGIDO: Verificar columnas antes de agrupar
-    columnas_agrupar = ['tipo_perforacion', 'guardia', 'operador']
-    columnas_existentes_agrupar = [col for col in columnas_agrupar if col in df_mov_det_filtrado.columns]
-    
-    if not columnas_existentes_agrupar:
-        return {}
-    
-    # Agrupar por tipo_perforacion, guardia, operador
-    agrupado = df_mov_det_filtrado.groupby(columnas_existentes_agrupar).agg({
+    # 🔥 CORREGIDO: Agrupar movimientos por tipo_perforacion, guardia, operador
+    agrupado_mov = df_mov_det_filtrado.groupby(['tipo_perforacion', 'guardia', 'operador']).agg({
         'cantidad': lambda x: x.abs().sum()
     }).reset_index()
-    agrupado = agrupado.rename(columns={'cantidad': 'Cantidad'})
+    agrupado_mov = agrupado_mov.rename(columns={'cantidad': 'Cantidad'})
     
-    # 🔧 CORREGIDO: Si 'tipo_perforacion' no existe, usar un valor por defecto
-    if 'tipo_perforacion' not in agrupado.columns:
-        agrupado['tipo_perforacion'] = 'GENERAL'
+    # 🔥 CORREGIDO: Obtener metros POR OPERADOR desde metros_general
+    df_met_gen = pd.DataFrame(load_metros_general())
     
-    # Ordenar por guardia y cantidad
-    if 'guardia' in agrupado.columns and 'Cantidad' in agrupado.columns:
-        agrupado = agrupado.sort_values(['tipo_perforacion', 'guardia', 'Cantidad'], ascending=[True, True, False])
+    if año and mes:
+        df_met_gen = df_met_gen[
+            (df_met_gen['ano'] == int(año)) &
+            (df_met_gen['mes'] == mes.upper())
+        ]
+    
+    if fecha_desde and fecha_hasta:
+        df_met_gen = df_met_gen[
+            (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
+            (pd.to_datetime(df_met_gen['fecha']) <= pd.to_datetime(fecha_hasta))
+        ]
+    
+    if compania != "TODAS":
+        df_met_gen = df_met_gen[df_met_gen['compania'] == compania.strip()]
+    
+    # 🔥 Verificar si operador existe en metros_general
+    if 'operador' not in df_met_gen.columns:
+        # Si no existe, asignar 0 metros a todos
+        agrupado_mov['Metros'] = 0
+        agrupado_mov['Rendimiento'] = 0
+    else:
+        # Obtener IDs de metros
+        met_ids = df_met_gen['id'].tolist()
+        df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
+        
+        # Unir metros con operador
+        df_met_det_filtrado = df_met_det_filtrado.merge(
+            df_met_gen[['id', 'operador']],
+            left_on='registro_id',
+            right_on='id',
+            how='left'
+        )
+        
+        # 🔥 CORREGIDO: Agrupar metros por operador
+        agrupado_met = df_met_det_filtrado.groupby(['operador']).agg({
+            'total_mp': 'sum'
+        }).reset_index()
+        agrupado_met = agrupado_met.rename(columns={'total_mp': 'Metros'})
+        
+        # 🔥 Unir movimientos y metros por operador
+        agrupado = agrupado_mov.merge(
+            agrupado_met,
+            on=['operador'],
+            how='left'
+        )
+        agrupado['Metros'] = agrupado['Metros'].fillna(0)
+        
+        # Calcular Rendimiento
+        agrupado['Rendimiento'] = agrupado.apply(
+            lambda row: row['Metros'] / row['Cantidad'] if row['Cantidad'] > 0 else 0,
+            axis=1
+        )
+        
+        # Ordenar
+        agrupado = agrupado.sort_values(['tipo_perforacion', 'guardia', 'Rendimiento'], ascending=[True, True, False])
     
     # Agrupar por tipo_perforacion
     tipos = agrupado['tipo_perforacion'].unique()
@@ -512,22 +470,21 @@ def process_consumo_brocas_operador(fecha_desde, fecha_hasta, año=None, mes=Non
     
     for tipo in tipos:
         df_tipo = agrupado[agrupado['tipo_perforacion'] == tipo]
-        # Seleccionar columnas disponibles
-        columnas_resultado = []
-        for col in ['guardia', 'operador', 'Cantidad']:
-            if col in df_tipo.columns:
-                columnas_resultado.append(col)
         
-        if columnas_resultado:
-            resultados[tipo] = df_tipo[columnas_resultado]
+        guardias = df_tipo['guardia'].unique()
+        resultados[tipo] = {}
+        
+        for guardia in guardias:
+            df_guardia = df_tipo[df_tipo['guardia'] == guardia]
+            resultados[tipo][guardia] = df_guardia[['operador', 'Cantidad', 'Metros', 'Rendimiento']]
     
     return resultados
-
 
 @st.cache_data(ttl=300)
 def process_metros_tipo(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
     """Procesa metros por tipo_perforacion"""
     
+    # 🔥 Usar funciones importadas de api_client
     met_detalles = load_metros_detalles()
     met_general = load_metros_general(fecha_desde, fecha_hasta)
     
@@ -587,6 +544,7 @@ def process_metros_tipo(fecha_desde, fecha_hasta, año=None, mes=None, compania=
 def get_top_consumos(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS", limit=5):
     """Obtiene los top consumos del período"""
     
+    # 🔥 Usar funciones importadas de api_client
     mov_detalles = load_movimientos_detalles()
     mov_general = load_movimientos_general(fecha_desde, fecha_hasta)
     
@@ -602,8 +560,6 @@ def get_top_consumos(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
             (df_mov_gen['mes'] == mes.upper()) &
             (df_mov_gen['movimiento'] == 'SALIDA')
         ]
-    else:
-        df_mov_gen = df_mov_gen[df_mov_gen['movimiento'] == 'SALIDA']
     
     if fecha_desde and fecha_hasta:
         df_mov_gen = df_mov_gen[
@@ -632,6 +588,7 @@ def get_top_consumos(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
 def get_evolucion_metros(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
     """Obtiene evolución de metros por día"""
     
+    # 🔥 Usar funciones importadas de api_client
     df_met_gen = pd.DataFrame(load_metros_general())
     
     if año and mes:
@@ -639,8 +596,6 @@ def get_evolucion_metros(fecha_desde, fecha_hasta, año=None, mes=None, compania
             (df_met_gen['ano'] == int(año)) &
             (df_met_gen['mes'] == mes.upper())
         ]
-    else:
-        df_met_gen = df_met_gen
     
     if fecha_desde and fecha_hasta:
         df_met_gen = df_met_gen[
@@ -811,7 +766,7 @@ with col_k5:
     st.metric("🚜 Equipos", f"{kpis['equipos_activos']}")
 
 with col_k6:
-    st.metric("⚠️ Stock Crítico", f"{kpis['stock_critico']}", delta="⚠️ Revisar")
+    st.metric("⚠️ Stock Crítico", f"{kpis['stock_critico']}")
 
 st.markdown("---")
 
@@ -843,6 +798,8 @@ if not df_evolucion.empty:
         height=350
     )
     st.plotly_chart(fig_evolucion, use_container_width=True)
+else:
+    st.info("ℹ️ No hay datos de evolución")
 
 # 3.2 Rendimiento por Tipo Perforación
 st.markdown("**📊 Rendimiento por Tipo Perforación**")
@@ -867,6 +824,8 @@ if not df_metros_tipo.empty:
         height=300
     )
     st.plotly_chart(fig_tipo, use_container_width=True)
+else:
+    st.info("ℹ️ No hay datos de metros por tipo")
 
 # 3.3 Top 5 Aceros Consumidos
 st.markdown("**🏆 Top 5 Aceros Consumidos**")
@@ -876,7 +835,6 @@ df_top = get_top_consumos(
 )
 
 if not df_top.empty:
-    # Mostrar solo código y cantidad
     df_top_display = df_top[['codigo', 'descripcion', 'cantidad']].copy()
     df_top_display.columns = ['Código', 'Descripción', 'Cantidad']
     
@@ -888,7 +846,7 @@ else:
 st.markdown("---")
 
 # ============================================
-# SECCIÓN 4: CONSUMO POR EQUIPO (por Tipo Perforación)
+# SECCIÓN 4: CONSUMO POR EQUIPO
 # ============================================
 
 st.subheader("🔧 Consumo por Familia, Tipo Perforación y Equipo")
@@ -900,9 +858,8 @@ with st.spinner("Procesando consumo por equipo..."):
 
 if consumo_equipo:
     for tipo in sorted(consumo_equipo.keys()):
-        st.markdown(f"**📌 {tipo}**")
+        st.markdown(f"### 📌 {tipo}")
         
-        # Crear columnas para los equipos (2 por fila)
         equipos = list(consumo_equipo[tipo].keys())
         for i in range(0, len(equipos), 2):
             cols = st.columns(2)
@@ -913,7 +870,6 @@ if consumo_equipo:
                     df = consumo_equipo[tipo][equipo]
                     
                     if not df.empty:
-                        # Formatear columnas para mostrar
                         df_display = df.copy()
                         df_display['Cantidad'] = df_display['Cantidad'].apply(lambda x: f"{x:,.0f}")
                         df_display['Metros'] = df_display['Metros'].apply(lambda x: f"{x:,.2f}")
@@ -931,10 +887,7 @@ if consumo_equipo:
 else:
     st.info("ℹ️ No hay datos de consumo por equipo")
 
-# ============================================
-# SECCIÓN 5: CONSUMO DE BROCAS POR OPERADOR (3 columnas)
-# ============================================
-
+# SECCIÓN 5: CONSUMO DE BROCAS POR OPERADOR
 st.subheader("👷 Consumo de BROCAS por Operador")
 
 with st.spinner("Procesando consumo de BROCAS..."):
@@ -943,32 +896,36 @@ with st.spinner("Procesando consumo de BROCAS..."):
     )
 
 if consumo_brocas:
-    # Mostrar en 3 columnas
-    tipos = list(consumo_brocas.keys())
-    for i in range(0, len(tipos), 3):
+    for tipo in sorted(consumo_brocas.keys()):
+        st.markdown(f"### 📌 {tipo}")
+        
+        guardias = list(consumo_brocas[tipo].keys())
+        guardias_ordenadas = sorted(guardias)
+        
         cols = st.columns(3)
         for j, col in enumerate(cols):
-            idx = i + j
-            if idx < len(tipos):
-                tipo = tipos[idx]
-                df = consumo_brocas[tipo]
+            if j < len(guardias_ordenadas):
+                guardia = guardias_ordenadas[j]
+                df = consumo_brocas[tipo][guardia]
                 
                 if not df.empty:
-                    # Formatear
+                    # 🔥 Formatear columnas
                     df_display = df.copy()
                     df_display['Cantidad'] = df_display['Cantidad'].apply(lambda x: f"{x:,.0f}")
+                    df_display['Metros'] = df_display['Metros'].apply(lambda x: f"{x:,.2f}")
+                    df_display['Rendimiento'] = df_display['Rendimiento'].apply(lambda x: f"{x:,.2f}")
                     
                     with col:
                         html_table = crear_tabla_html(
                             df_display,
-                            titulo=f"🔧 {tipo}",
-                            columnas_estrechas=['Guardia', 'Operador', 'Cantidad']
+                            titulo=f"🛡️ Guardia: {guardia}",
+                            columnas_estrechas=['operador', 'Cantidad', 'Metros', 'Rendimiento']
                         )
                         st.markdown(html_table, unsafe_allow_html=True)
+        
+        st.markdown("---")
 else:
     st.info("ℹ️ No hay datos de consumo de BROCAS")
-
-st.markdown("---")
 
 # ============================================
 # SECCIÓN 6: METROS POR TIPO PERFORACIÓN
@@ -984,6 +941,8 @@ if not df_metros_tipo.empty:
     
     html_metros = crear_tabla_html(df_metros_display, titulo="📊 Resumen de Metros")
     st.markdown(html_metros, unsafe_allow_html=True)
+else:
+    st.info("ℹ️ No hay datos de metros")
 
 # ============================================
 # PIE DE PÁGINA
