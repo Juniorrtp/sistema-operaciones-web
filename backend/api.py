@@ -6,10 +6,9 @@ from typing import List, Optional
 from datetime import datetime
 import os
 import sys
-from passlib.context import CryptContext
-import secrets
 from pydantic import BaseModel
-
+import hashlib
+import secrets
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -30,9 +29,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# ============================================================
+# AUTENTICACIÓN CON SHA-256
+# ============================================================
 
-# Diccionario para almacenar sesiones (se reinicia si el servidor se cae)
+# Diccionario para almacenar sesiones
 sesiones = {}
 
 class LoginRequest(BaseModel):
@@ -40,10 +41,40 @@ class LoginRequest(BaseModel):
     password: str
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verifica si la contraseña coincide con el hash SHA-256"""
+    password_hash = hashlib.sha256(plain_password.encode()).hexdigest()
+    return password_hash == hashed_password
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """Genera hash SHA-256 de una contraseña"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ============================================================
+# FUNCIÓN PARA VERIFICAR STREAMLIT (API Key)
+# ============================================================
+
+# Clave secreta para Streamlit (poner en .env)
+STREAMLIT_API_KEY = os.getenv("STREAMLIT_API_KEY", "streamlit-secret-key-2024")
+
+def verify_request(request: Request):
+    """Verifica autenticación (cookie o API Key para Streamlit)"""
+    
+    # Primero verificar si es Streamlit (API Key en header)
+    api_key = request.headers.get("X-API-Key")
+    if api_key and api_key == STREAMLIT_API_KEY:
+        return {"source": "streamlit", "authenticated": True, "user": "streamlit"}
+    
+    # Si no, verificar cookie de usuario normal
+    session_token = request.cookies.get("session_token")
+    if session_token and session_token in sesiones:
+        return sesiones[session_token]
+    
+    # Si nada funciona, error 401
+    raise HTTPException(status_code=401, detail="No autenticado")
+
+# ============================================================
+# ENDPOINTS DE AUTENTICACIÓN
+# ============================================================
 
 @app.post("/api/auth/login")
 async def login(data: LoginRequest, response: Response):
@@ -83,7 +114,7 @@ async def login(data: LoginRequest, response: Response):
             max_age=86400,  # 24 horas
             httponly=True,
             samesite="lax",
-            secure=False  # ✅ Cambiar a True en producción con HTTPS
+            secure=False  # Cambiar a True en producción con HTTPS
         )
         
         return {
@@ -118,22 +149,6 @@ async def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="No autenticado")
     
     return sesiones[session_token]
-
-# ============================================================
-# ✅ FUNCIÓN PARA PROTEGER ENDPOINTS
-# ============================================================
-
-def get_current_user_from_cookie(request: Request):
-    """Función para usar en endpoints protegidos"""
-    session_token = request.cookies.get("session_token")
-    
-    if not session_token or session_token not in sesiones:
-        raise HTTPException(status_code=401, detail="No autenticado")
-    
-    return sesiones[session_token]
-
-
-
 
 # ============================================================
 # SERVIR ARCHIVOS ESTÁTICOS (Frontend)
@@ -276,7 +291,7 @@ async def listar_movimientos(
     movimiento: Optional[str] = None,
     limit: int = 100
 ):
-    user = get_current_user_from_cookie(request)
+    user = verify_request(request)
     try:
         db = get_db()
         query = db.client.table("movimiento_general").select("*")
@@ -297,7 +312,7 @@ async def listar_movimientos(
 
 @app.get("/api/movimientos/{id}")
 async def obtener_movimiento(id: int,request: Request):
-    user = get_current_user_from_cookie(request)
+    user = verify_request(request)
     try:
         db = get_db()
         general = db.get_by_id("movimiento_general", id)
