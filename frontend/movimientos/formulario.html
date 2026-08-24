@@ -735,9 +735,12 @@
             const equipo = equiposCache.find(eq => eq.equipo === equipoNombre);
             if (equipo && equipo.tipo_perforacion) {
                 tipoPerforacionSelect.value = equipo.tipo_perforacion;
+                console.log(`🔄 Tipo perforación actualizado: ${equipo.tipo_perforacion}`);
+            } else {
+                // Si no tiene tipo_perforacion, dejar en blanco
+                tipoPerforacionSelect.value = '';
             }
         }
-
 
         function actualizarGuardia() {
             const operadorSelect = document.getElementById('operador');
