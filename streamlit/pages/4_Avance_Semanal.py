@@ -714,7 +714,7 @@ st.markdown("""
 # FILTROS Y CARGA DE DATOS
 # ============================================
 
-st.title("📅 Avance Semanal - Reporte Gerencial")
+st.title("📅 Avance Semanal - Reporte Operativo")
 
 with st.spinner("Cargando datos..."):
     movimientos_data = load_movimientos_general()
@@ -880,11 +880,11 @@ with st.spinner("Generando reporte..."):
 # SECCIÓN 1: TABLA DE CONSUMOS CON HTML
 # ============================================
 
-st.header("📊 Consumos por Estado y Tipo Perforación")
+st.header("📊 Consumos de aceros de perforación")
 
 if consumos_data:
     for estado in sorted(consumos_data.keys()):
-        st.subheader(f"📌 Estado: {estado}")
+        st.subheader(f" Estado: {estado}")
         
         for tipo in sorted(consumos_data[estado].keys()):
             df = consumos_data[estado][tipo]
@@ -900,7 +900,7 @@ else:
 # SECCIÓN 2: RESUMEN DE METROS CON HTML
 # ============================================
 
-st.header("📏 Resumen de Metros por Tipo Perforación")
+st.header("📏 Resumen de Metros perforados")
 
 if not df_metros.empty:
     html_tabla = crear_tabla_html(df_metros, titulo="📊 Metros por Tipo Perforación")
@@ -1002,7 +1002,7 @@ if consumos_data:
 # ============================================
 
 if consumos_data:
-    st.subheader("🏆 Top 10 Aceros más Consumidos")
+    st.subheader("Aceros con mas consumos en el periodo")
     
     top_consumos = []
     for estado in consumos_data:
@@ -1033,7 +1033,7 @@ if consumos_data:
 # SECCIÓN: RENDIMIENTO DE ACEROS
 # ============================================
 
-st.header("🏆 Rendimiento de Aceros")
+st.header("Rendimiento de Aceros de Perforación")
 
 with st.spinner("Procesando rendimiento de aceros..."):
     rendimiento_aceros = process_rendimiento_aceros(
