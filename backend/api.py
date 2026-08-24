@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -9,6 +9,7 @@ import sys
 from passlib.context import CryptContext
 import secrets
 from pydantic import BaseModel
+
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -269,11 +270,13 @@ async def debug_stock_cache():
 
 @app.get("/api/movimientos")
 async def listar_movimientos(
+    request: Request, 
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
     movimiento: Optional[str] = None,
     limit: int = 100
 ):
+    user = get_current_user_from_cookie(request)
     try:
         db = get_db()
         query = db.client.table("movimiento_general").select("*")
@@ -293,7 +296,8 @@ async def listar_movimientos(
 
 
 @app.get("/api/movimientos/{id}")
-async def obtener_movimiento(id: int):
+async def obtener_movimiento(id: int,request: Request):
+    user = get_current_user_from_cookie(request)
     try:
         db = get_db()
         general = db.get_by_id("movimiento_general", id)
