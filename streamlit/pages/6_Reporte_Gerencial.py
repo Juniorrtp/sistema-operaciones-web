@@ -100,9 +100,9 @@ def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
 # ============================================
 
 def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
-    """Calcula KPIs para el reporte"""
+    """Calcula KPIs para el reporte - Eficiencia y Cumplimiento desde Rendimiento"""
     
-    # 🔥 Usar funciones importadas de api_client
+    # Total Metros
     df_met_gen = pd.DataFrame(load_metros_general())
     df_met_filtrado = df_met_gen[
         (df_met_gen['ano'] == int(año)) &
@@ -136,12 +136,90 @@ def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
     # Equipos Activos
     equipos_activos = len(df_met_filtrado['equipo'].dropna().unique())
     
-    # Eficiencia Global
-    eficiencia = (total_metros / total_consumo) if total_consumo > 0 else 0
+    # ============================================
+    # 🔥 NUEVO: Calcular Eficiencia Global desde Rendimiento
+    # ============================================
+    
+    eficiencia = 0
+    cumplimiento = 0
+    
+    try:
+        # Usar la misma lógica que process_rendimiento_aceros
+        objetivos = load_objetivos()
+        
+        # Crear diccionario de objetivos
+        obj_dict = {}
+        for obj in objetivos:
+            tipo = obj.get('Tipo Perforacion', '')
+            familia = obj.get('Acero', '')
+            objetivo_val = obj.get('Objetivo', 0)
+            if objetivo_val is None:
+                objetivo_val = 0
+            obj_dict[(tipo, familia)] = objetivo_val
+        
+        # Obtener familias y tipos
+        df_mov_det = pd.DataFrame(load_movimientos_detalles())
+        mov_ids = df_mov_filtrado['id'].tolist()
+        df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
+        df_mov_det_filtrado['cantidad'] = df_mov_det_filtrado['cantidad'].abs()
+        
+        # Obtener metros detalles
+        met_ids = df_met_filtrado['id'].tolist()
+        df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
+        
+        # Obtener tipos comunes
+        tipos_mov = set(df_mov_filtrado['tipo_perforacion'].dropna().unique())
+        tipos_met = set(df_met_filtrado['tipo_perforacion'].dropna().unique())
+        tipos_comunes = list(tipos_mov.intersection(tipos_met))
+        
+        # Calcular eficiencias por tipo/familia
+        eficiencias = []
+        cumplimientos = []
+        
+        for tipo in tipos_comunes:
+            # Metros para este tipo
+            met_tipo = df_met_filtrado[df_met_filtrado['tipo_perforacion'] == tipo]
+            met_ids_tipo = met_tipo['id'].tolist()
+            df_met_tipo = df_met_det_filtrado[df_met_det_filtrado['registro_id'].isin(met_ids_tipo)]
+            
+            # Movimientos para este tipo
+            df_mov_tipo = df_mov_filtrado[df_mov_filtrado['tipo_perforacion'] == tipo]
+            mov_ids_tipo = df_mov_tipo['id'].tolist()
+            df_mov_tipo_det = df_mov_det_filtrado[df_mov_det_filtrado['entrega_id'].isin(mov_ids_tipo)]
+            
+            # Familias
+            familias = df_mov_tipo_det['familia'].dropna().unique()
+            
+            for familia in familias:
+                cantidad = df_mov_tipo_det[df_mov_tipo_det['familia'] == familia]['cantidad'].sum()
+                
+                if familia.upper() == 'RIMADORAS':
+                    metros = df_met_tipo['mp_rimado'].sum()
+                else:
+                    metros = df_met_tipo['total_mp'].sum()
+                
+                rendimiento = metros / cantidad if cantidad > 0 else 0
+                objetivo = obj_dict.get((tipo, familia), 0)
+                
+                if objetivo > 0:
+                    eficiencia_val = (rendimiento / objetivo * 100)
+                    eficiencias.append(eficiencia_val)
+                    cumplimientos.append(eficiencia_val)  # Cumplimiento = eficiencia (porcentaje)
+        
+        # Promedios
+        if eficiencias:
+            eficiencia = sum(eficiencias) / len(eficiencias)
+        if cumplimientos:
+            cumplimiento = sum(cumplimientos) / len(cumplimientos)
+            
+    except Exception as e:
+        # Si falla, usar valores por defecto
+        eficiencia = (total_metros / total_consumo) if total_consumo > 0 else 0
+        cumplimiento = (total_metros / 1000 * 100) if total_metros > 0 else 0
     
     # Stock Crítico
     stock_data = load_stock_from_api()
-    aceros = load_aceros()
+    aceros = fetch_from_api("aceros")
     
     minimos = {}
     for a in aceros:
@@ -163,10 +241,6 @@ def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
         if stock < minimo and stock > 0:
             stock_critico += 1
     
-    # Cumplimiento de Metas
-    objetivo_mensual = 1000
-    cumplimiento = (total_metros / objetivo_mensual * 100) if objetivo_mensual > 0 else 0
-    
     return {
         'total_metros': total_metros,
         'total_consumo': total_consumo,
@@ -176,6 +250,8 @@ def get_kpis_reporte(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
         'cumplimiento': cumplimiento,
         'dias_mes': len(df_met_filtrado['fecha'].unique()) if not df_met_filtrado.empty else 0
     }
+
+
 
 @st.cache_data(ttl=300)
 def process_consumo_equipo(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
@@ -586,9 +662,8 @@ def get_top_consumos(fecha_desde, fecha_hasta, año=None, mes=None, compania="TO
 
 @st.cache_data(ttl=300)
 def get_evolucion_metros(fecha_desde, fecha_hasta, año=None, mes=None, compania="TODAS"):
-    """Obtiene evolución de metros por día"""
+    """Obtiene evolución de metros por día, separado por tipo_perforacion"""
     
-    # 🔥 Usar funciones importadas de api_client
     df_met_gen = pd.DataFrame(load_metros_general())
     
     if año and mes:
@@ -613,21 +688,23 @@ def get_evolucion_metros(fecha_desde, fecha_hasta, año=None, mes=None, compania
     df_met_det = pd.DataFrame(load_metros_detalles())
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    evolucion = []
-    for _, row in df_met_gen.iterrows():
-        met_id = row['id']
-        total_mp = df_met_det_filtrado[df_met_det_filtrado['registro_id'] == met_id]['total_mp'].sum()
-        evolucion.append({
-            'fecha': row['fecha'],
-            'metros': total_mp
-        })
+    # 🔥 Unir con tipo_perforacion
+    df_met_det_filtrado = df_met_det_filtrado.merge(
+        df_met_gen[['id', 'tipo_perforacion', 'fecha']],
+        left_on='registro_id',
+        right_on='id',
+        how='left'
+    )
     
-    df_evolucion = pd.DataFrame(evolucion)
-    df_evolucion = df_evolucion.groupby('fecha')['metros'].sum().reset_index()
-    df_evolucion = df_evolucion.sort_values('fecha')
+    # 🔥 Agrupar por fecha y tipo_perforacion
+    evolucion = df_met_det_filtrado.groupby(['fecha', 'tipo_perforacion']).agg({
+        'total_mp': 'sum'
+    }).reset_index()
     
-    return df_evolucion
-
+    evolucion = evolucion.rename(columns={'total_mp': 'metros'})
+    evolucion = evolucion.sort_values(['fecha', 'tipo_perforacion'])
+    
+    return evolucion
 # ============================================
 # FILTROS
 # ============================================
@@ -730,12 +807,12 @@ with st.spinner("Calculando indicadores..."):
 # SECCIÓN 1: CABECERA
 # ============================================
 
-st.subheader(f"📋 Reporte Gerencial - {mes_seleccionado} {año_seleccionado}")
+st.subheader(f"📋 Reporte Operativo - Rock Tools Peru - JRC - {mes_seleccionado} {año_seleccionado}")
 st.caption(f"📅 Período: {fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}")
 
 # Resumen Ejecutivo
 resumen = f"""
-📊 **Resumen Ejecutivo:** Durante el mes de {mes_seleccionado} {año_seleccionado}, 
+📊 **Resumen Operativo:** Durante el mes de {mes_seleccionado} {año_seleccionado}, 
 se perforaron **{kpis['total_metros']:,.2f} metros** con un consumo total de **{kpis['total_consumo']:,.0f} unidades**.
 La eficiencia global fue de **{kpis['eficiencia']:.2f} m/unidad**, con **{kpis['equipos_activos']} equipos activos**.
 """
@@ -777,25 +854,35 @@ st.markdown("---")
 st.subheader("📈 Análisis de Rendimiento")
 
 # 3.1 Evolución de Metros
-st.markdown("**📈 Evolución de Metros**")
+# 3.1 Evolución de Metros
+st.markdown("**📈 Evolución de Metros por Tipo Perforación**")
 
 df_evolucion = get_evolucion_metros(
     fecha_inicio, fecha_fin, año_seleccionado, mes_seleccionado, "TODAS"
 )
 
 if not df_evolucion.empty:
+    # 🔥 Gráfico con líneas separadas por tipo_perforacion
     fig_evolucion = px.line(
         df_evolucion,
         x='fecha',
         y='metros',
-        title=f"Evolución Diaria - {mes_seleccionado} {año_seleccionado}",
-        labels={'fecha': 'Fecha', 'metros': 'Metros (m)'},
+        color='tipo_perforacion',
+        title=f"Evolución de Metros por Tipo - {mes_seleccionado} {año_seleccionado}",
+        labels={'fecha': 'Fecha', 'metros': 'Metros (m)', 'tipo_perforacion': 'Tipo Perforación'},
         markers=True
     )
     fig_evolucion.update_layout(
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        height=350
+        height=400,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
     )
     st.plotly_chart(fig_evolucion, use_container_width=True)
 else:
@@ -828,7 +915,7 @@ else:
     st.info("ℹ️ No hay datos de metros por tipo")
 
 # 3.3 Top 5 Aceros Consumidos
-st.markdown("**🏆 Top 5 Aceros Consumidos**")
+st.markdown("Top 5 Aceros con mas consumos**")
 
 df_top = get_top_consumos(
     fecha_inicio, fecha_fin, año_seleccionado, mes_seleccionado, "TODAS", 5
@@ -849,7 +936,7 @@ st.markdown("---")
 # SECCIÓN 4: CONSUMO POR EQUIPO
 # ============================================
 
-st.subheader("🔧 Consumo por Familia, Tipo Perforación y Equipo")
+st.subheader("Analisis de rendimiento por Equipos")
 
 with st.spinner("Procesando consumo por equipo..."):
     consumo_equipo = process_consumo_equipo(
@@ -888,7 +975,7 @@ else:
     st.info("ℹ️ No hay datos de consumo por equipo")
 
 # SECCIÓN 5: CONSUMO DE BROCAS POR OPERADOR
-st.subheader("👷 Consumo de BROCAS por Operador")
+st.subheader("Rendimiento de brocas por Operador")
 
 with st.spinner("Procesando consumo de BROCAS..."):
     consumo_brocas = process_consumo_brocas_operador(
@@ -931,7 +1018,7 @@ else:
 # SECCIÓN 6: METROS POR TIPO PERFORACIÓN
 # ============================================
 
-st.subheader("📏 Metros por Tipo Perforación")
+st.subheader("Resuemn de Metros por Tipo Perforación")
 
 if not df_metros_tipo.empty:
     df_metros_display = df_metros_tipo.copy()
