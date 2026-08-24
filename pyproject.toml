@@ -1,23 +1,4 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "sistema-operaciones"
 version = "1.0.0"
-description = "Sistema de Control de Aceros y Perforación"
-readme = "README.md"
 requires-python = ">=3.9,<3.11"
-dependencies = [
-    "streamlit==1.35.0",
-    "requests==2.31.0",
-    "pandas==2.0.3",
-    "plotly==5.18.0",
-    "python-dotenv==1.0.0",
-    "openpyxl==3.1.2",
-    "numpy==1.24.3",
-    "pillow==10.1.0"
-]
-
-[project.scripts]
-streamlit = "streamlit.web.cli:main"

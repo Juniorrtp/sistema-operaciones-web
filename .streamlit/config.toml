@@ -1,0 +1,4 @@
+[global]
+# Deshabilitar uv y usar pip
+disable_uv = true
+
