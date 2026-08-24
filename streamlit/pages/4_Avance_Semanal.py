@@ -262,7 +262,7 @@ def process_rendimiento_aceros(fecha_desde, fecha_hasta, año=None, mes=None, co
             (df_met_gen['mes'] == mes.upper())
         ]
     
-    if fecha_desde y fecha_hasta:
+    if fecha_desde and fecha_hasta:
         df_met_gen = df_met_gen[
             (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_desde)) &
             (pd.to_datetime(df_met_gen['fecha']) <= pd.to_datetime(fecha_hasta))
