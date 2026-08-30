@@ -713,6 +713,30 @@ async def crear_metro(data: dict):
     try:
         db = get_db()
         
+        # ============================================================
+        # ✅ CALCULAR total_mp PARA CADA DETALLE
+        # ============================================================
+        
+        # Obtener detalles
+        detalles = data.get('detalles', [])
+        
+        # ✅ Calcular total_mp para cada detalle (si no viene)
+        for detalle in detalles:
+            if 'total_mp' not in detalle or detalle['total_mp'] is None:
+                mp_produccion = detalle.get('mp_produccion', 0) or 0
+                mp_rimado = detalle.get('mp_rimado', 0) or 0
+                detalle['total_mp'] = mp_produccion + mp_rimado
+                print(f"📊 Detalle: mp_produccion={mp_produccion}, mp_rimado={mp_rimado}, total_mp={detalle['total_mp']}")
+        
+        # ✅ Calcular total_mp GENERAL (suma de todos los detalles)
+        total_general = sum(d.get('total_mp', 0) for d in detalles)
+        data['total_mp'] = total_general
+        print(f"📊 Total general: {total_general}")
+        
+        # ============================================================
+        # GUARDAR EN LA BASE DE DATOS
+        # ============================================================
+        
         # Separar cabecera y detalles
         detalles = data.pop('detalles', [])
         
@@ -727,18 +751,43 @@ async def crear_metro(data: dict):
             db.client.table("metros_detalles").insert(detalle).execute()
         
         return {"success": True, "id": metro_id}
+        
     except Exception as e:
         print(f"❌ Error al guardar metro: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.put("/api/metros/{id}")
 async def actualizar_metro(id: int, data: dict):
     try:
         db = get_db()
         
+        # ============================================================
+        # ✅ CALCULAR total_mp PARA CADA DETALLE
+        # ============================================================
+        
+        # Obtener detalles
+        detalles = data.get('detalles', [])
+        
+        # ✅ Calcular total_mp para cada detalle (si no viene)
+        for detalle in detalles:
+            if 'total_mp' not in detalle or detalle['total_mp'] is None:
+                mp_produccion = detalle.get('mp_produccion', 0) or 0
+                mp_rimado = detalle.get('mp_rimado', 0) or 0
+                detalle['total_mp'] = mp_produccion + mp_rimado
+                print(f"📊 Detalle: mp_produccion={mp_produccion}, mp_rimado={mp_rimado}, total_mp={detalle['total_mp']}")
+        
+        # ✅ Calcular total_mp GENERAL (suma de todos los detalles)
+        total_general = sum(d.get('total_mp', 0) for d in detalles)
+        data['total_mp'] = total_general
+        print(f"📊 Total general: {total_general}")
+        
+        # ============================================================
+        # ACTUALIZAR EN LA BASE DE DATOS
+        # ============================================================
+        
+        # Separar cabecera y detalles
         detalles = data.pop('detalles', [])
         
         # Actualizar cabecera
@@ -753,8 +802,11 @@ async def actualizar_metro(id: int, data: dict):
             db.client.table("metros_detalles").insert(detalle).execute()
         
         return {"success": True}
+        
     except Exception as e:
         print(f"❌ Error al actualizar metro: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
