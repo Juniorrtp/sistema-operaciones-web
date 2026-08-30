@@ -670,7 +670,8 @@
                 const lon_perf = parseFloat(row.querySelector('.longitud-input').value) || 0;
                 const mp_produccion = parseFloat(row.querySelector('.mp-prod-input').value) || 0;
                 const mp_rimado = parseFloat(row.querySelector('.mp-rim-input').value) || 0;
-
+                const total_mp = mp_produccion + mp_rimado;
+                
                 if (cod_ac && num_tal > 0) {
                     detalles.push({
                         brazo: brazo,
@@ -683,7 +684,8 @@
                         rimados: rimados,
                         lon_perf: lon_perf,
                         mp_produccion: mp_produccion,
-                        mp_rimado: mp_rimado
+                        mp_rimado: mp_rimado,
+                        total_mp: total_mp
                     });
                 }
             });
