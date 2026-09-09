@@ -215,6 +215,19 @@
             </div>
 
             <!-- ============================================================
+            MODO PRUEBA
+            ============================================================ -->
+            <div style="margin-top: 16px;">
+                <input type="checkbox" id="modoPrueba" checked>
+                <label for="modoPrueba" style="font-size: 14px; font-weight: normal; margin-left: 6px;">
+                    🔬 Modo Prueba (simular carga, no guardar)
+                </label>
+                <small class="text-muted d-block" style="font-size: 12px;">
+                    Si está activado, se validará el archivo sin guardar datos.
+                </small>
+            </div>
+
+            <!-- ============================================================
             VISTA PREVIA (Opcional)
             ============================================================ -->
             <div id="previewContainer" style="display: none;">
@@ -247,6 +260,66 @@
     ============================================================ -->
     <script src="../js/api.js"></script>
     <script>
+        // ============================================================
+        // CONFIGURACIÓN DE LA API
+        // ============================================================
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8000/api' 
+            : 'https://sistema-operaciones-web.onrender.com/api';
+
+        // ============================================================
+        // FUNCIÓN PARA CARGAR MOVIMIENTOS DESDE EXCEL
+        // ============================================================
+        async function cargarMovimientosExcel(file, mes, ano, prueba = false) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('mes', mes);
+            formData.append('ano', ano.toString());
+            formData.append('prueba', prueba ? 'true' : 'false');
+            
+            const response = await fetch(`${API_URL}/movimientos/cargar-excel`, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'Error al cargar movimientos');
+            }
+            
+            return data;
+        }
+
+        // ============================================================
+        // FUNCIÓN PARA DESCARGAR PLANTILLA
+        // ============================================================
+        async function descargarPlantilla() {
+            try {
+                const response = await fetch(`${API_URL}/movimientos/plantilla-excel`, {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Error al descargar la plantilla');
+                }
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'plantilla_movimientos.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Error descargando plantilla:', error);
+                mostrarResultado('error', '❌ Error al descargar la plantilla: ' + error.message);
+            }
+        }
+
         // ============================================================
         // VARIABLES
         // ============================================================
@@ -407,6 +480,7 @@
 
             const mes = document.getElementById('mesSelect').value;
             const ano = parseInt(document.getElementById('anoInput').value);
+            const modoPrueba = document.getElementById('modoPrueba').checked;
 
             if (!ano || ano < 2000 || ano > 2100) {
                 mostrarResultado('error', '❌ Ingresa un año válido (2000-2100)');
@@ -420,12 +494,16 @@
             resultado.className = 'resultado-box';
 
             try {
-                const response = await cargarMovimientosExcel(archivoSeleccionado, mes, ano);
+                const response = await cargarMovimientosExcel(archivoSeleccionado, mes, ano, modoPrueba);
 
                 if (response.success) {
-                    // Éxito
+                    let mensaje = response.message || '✅ Carga exitosa';
+                    if (response.prueba) {
+                        mensaje = '🔬 ' + mensaje;
+                    }
+                    
                     let html = `
-                        <div style="font-size: 16px; font-weight: 600;">✅ ${response.message}</div>
+                        <div style="font-size: 16px; font-weight: 600;">${mensaje}</div>
                         <div class="resumen-carga">
                             <div class="item">
                                 <div class="numero">${response.movimientos || 0}</div>
@@ -439,14 +517,19 @@
                     `;
                     mostrarResultado('exito', html);
 
-                    // Limpiar después de éxito
-                    setTimeout(() => {
-                        if (confirm('✅ Carga exitosa. ¿Quieres ir al listado de movimientos?')) {
-                            window.location.href = 'listar.html';
-                        } else {
-                            limpiarTodo();
-                        }
-                    }, 500);
+                    if (!response.prueba) {
+                        setTimeout(() => {
+                            if (confirm('✅ Carga exitosa. ¿Quieres ir al listado de movimientos?')) {
+                                window.location.href = 'listar.html';
+                            } else {
+                                limpiarTodo();
+                            }
+                        }, 500);
+                    } else {
+                        // En modo prueba, no redirigir
+                        btnCargar.disabled = false;
+                        btnCargar.textContent = '📤 Cargar Movimientos';
+                    }
 
                 } else {
                     // Error con detalles
@@ -459,12 +542,13 @@
                         html += `</ul></div>`;
                     }
                     mostrarResultado('error', html);
+                    btnCargar.disabled = false;
+                    btnCargar.textContent = '📤 Cargar Movimientos';
                 }
 
             } catch (error) {
                 console.error('Error en procesarCarga:', error);
                 mostrarResultado('error', `❌ Error: ${error.message || 'Error desconocido'}`);
-            } finally {
                 btnCargar.disabled = false;
                 btnCargar.textContent = '📤 Cargar Movimientos';
             }
@@ -478,27 +562,6 @@
             resultado.className = `resultado-box ${tipo}`;
             resultado.innerHTML = mensaje;
             resultado.style.display = 'block';
-        }
-
-        // ============================================================
-        // DESCARGAR PLANTILLA
-        // ============================================================
-
-        async function descargarPlantilla() {
-            try {
-                const blob = await descargarPlantillaMovimientos();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'plantilla_movimientos.xlsx';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Error descargando plantilla:', error);
-                mostrarResultado('error', '❌ Error al descargar la plantilla: ' + error.message);
-            }
         }
 
         // ============================================================
