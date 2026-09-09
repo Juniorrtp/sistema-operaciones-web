@@ -188,8 +188,21 @@ def agrupar_por_vale(df, mes, ano, db):
         # Siempre negativo (SALIDA)
         cantidad = -abs(cantidad)
         
+        # ============================================================
+        # CONVERTIR BRAZO: I → BRAZO 1, D → BRAZO 2
+        # ============================================================
+        brazo_raw = str(row.get('Brazo', '')).strip() if pd.notna(row.get('Brazo')) else ''
+        brazo_convertido = None
+
+        if brazo_raw.upper() == 'I':
+            brazo_convertido = 'BRAZO 1'
+        elif brazo_raw.upper() == 'D':
+            brazo_convertido = 'BRAZO 2'
+        elif brazo_raw:  # Si tiene otro valor, lo dejamos tal cual
+            brazo_convertido = brazo_raw
+        
         movimientos[vale]["detalles"].append({
-            "brazo": str(row.get('Brazo', '')).strip() if pd.notna(row.get('Brazo')) else None,
+            "brazo": brazo_convertido,
             "codigo": str(row.get('Codigo', '')).strip(),
             "descripcion": str(row.get('Descripcion', '')).strip() if pd.notna(row.get('Descripcion')) else "",
             "cantidad": cantidad,
@@ -197,8 +210,6 @@ def agrupar_por_vale(df, mes, ano, db):
         })
     
     return list(movimientos.values())
-
-
 
 # ============================================================
 # ENDPOINTS DE AUTENTICACIÓN
@@ -386,7 +397,103 @@ async def startup_event():
     print("🚀 INICIANDO API...")
     actualizar_cache_stock()
 
-
+@app.post("/api/movimientos/cargar-excel")
+async def cargar_movimientos_excel(
+    file: UploadFile = File(...),
+    mes: str = Form(...),
+    ano: int = Form(...)
+):
+    """Carga masiva de movimientos desde Excel"""
+    try:
+        db = get_db()
+        
+        # 1. Leer Excel
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        
+        # 2. Validar columnas requeridas
+        columnas_requeridas = ['VALE', 'Fecha', 'Guardia', 'Operador', 'Equipo', 
+                               'Tipo Perforacion', 'Estado', 'Codigo', 'Descripcion', 
+                               'Cant.', 'Brazo', 'MOTIVO']
+        
+        for col in columnas_requeridas:
+            if col not in df.columns:
+                return {
+                    "success": False,
+                    "message": f"❌ Falta la columna '{col}' en el Excel",
+                    "errores": [f"Columna requerida: '{col}'"]
+                }
+        
+        # 3. Validar operadores y equipos
+        errores = validar_operadores_y_equipos(df, db)
+        if errores:
+            return {
+                "success": False,
+                "message": "❌ El archivo tiene errores. No se guardó nada.",
+                "errores": errores
+            }
+        
+        # 4. Validar duplicados
+        errores_dup = validar_duplicados(df, db)
+        if errores_dup:
+            return {
+                "success": False,
+                "message": "❌ El archivo tiene duplicados. No se guardó nada.",
+                "errores": errores_dup
+            }
+        
+        # 5. Agrupar por VALE
+        movimientos = agrupar_por_vale(df, mes, ano, db)
+        
+        if not movimientos:
+            return {
+                "success": False,
+                "message": "❌ No se encontraron datos válidos en el archivo",
+                "errores": ["El archivo está vacío o no tiene datos válidos"]
+            }
+        
+        # 6. Guardar en la base de datos
+        total_movimientos = 0
+        total_detalles = 0
+        
+        for movimiento in movimientos:
+            # Separar detalles
+            detalles = movimiento.pop('detalles', [])
+            
+            # Insertar cabecera
+            result = db.client.table("movimiento_general").insert(movimiento).execute()
+            
+            if not result.data:
+                continue
+            
+            movimiento_id = result.data[0]['id']
+            total_movimientos += 1
+            
+            # Insertar detalles
+            for detalle in detalles:
+                detalle['entrega_id'] = movimiento_id
+                db.client.table("movimiento_detalles").insert(detalle).execute()
+                total_detalles += 1
+        
+        # 7. Actualizar cache de stock
+        actualizar_cache_stock()
+        
+        return {
+            "success": True,
+            "message": f"✅ Carga exitosa: {total_movimientos} movimientos y {total_detalles} detalles creados.",
+            "movimientos": total_movimientos,
+            "detalles": total_detalles
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en carga masiva: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"❌ Error al procesar el archivo: {str(e)}",
+            "errores": [str(e)]
+        }
 
 
 @app.get("/api/stock")
