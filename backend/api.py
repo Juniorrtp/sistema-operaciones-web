@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, HTTPException, Request, Response, Depends,UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -9,6 +9,9 @@ import sys
 from pydantic import BaseModel
 import hashlib
 import secrets
+import pandas as pd
+import io
+
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -71,6 +74,131 @@ def verify_request(request: Request):
     
     # Si nada funciona, error 401
     raise HTTPException(status_code=401, detail="No autenticado")
+
+# ============================================================
+# FUNCIONES PARA CARGA MASIVA DE MOVIMIENTOS
+# ============================================================
+
+def validar_operadores_y_equipos(df, db):
+    """Valida que todos los operadores y equipos existan en la BD"""
+    errores = []
+    
+    # Obtener listas existentes
+    operadores_result = db.client.table("operador").select("nombre").execute()
+    equipos_result = db.client.table("equipo").select("equipo").execute()
+    
+    operadores_existentes = [op['nombre'] for op in operadores_result.data] if operadores_result.data else []
+    equipos_existentes = [eq['equipo'] for eq in equipos_result.data] if equipos_result.data else []
+    
+    # Validar cada fila
+    for idx, row in df.iterrows():
+        numero_fila = idx + 2  # +2 por encabezado y base 0        
+        operador = str(row.get('Operador', '')).strip()
+        equipo = str(row.get('Equipo', '')).strip()
+        
+        if operador and operador not in operadores_existentes:
+            errores.append(f"❌ Fila {numero_fila}: Operador '{operador}' no existe en la base de datos")
+        
+        if equipo and equipo not in equipos_existentes:
+            errores.append(f"❌ Fila {numero_fila}: Equipo '{equipo}' no existe en la base de datos")
+    
+    return errores
+
+
+def validar_duplicados(df, db):
+    """Valida que no existan VALE + Fecha ya cargados"""
+    errores = []
+    
+    for idx, row in df.iterrows():
+        numero_fila = idx + 2
+        vale = str(row.get('VALE', '')).strip()
+        fecha = row.get('Fecha')
+        
+        if not vale or pd.isna(fecha):
+            continue
+        
+        # Verificar si ya existe
+        existe = db.client.table("movimiento_general") \
+            .select("id") \
+            .eq("guia", vale) \
+            .eq("fecha", fecha.strftime('%Y-%m-%d')) \
+            .execute()
+        
+        if existe.data:
+            errores.append(f"❌ Fila {numero_fila}: VALE '{vale}' ya existe para la fecha {fecha.strftime('%Y-%m-%d')}")
+    
+    return errores
+
+
+def agrupar_por_vale(df, mes, ano, db):
+    """Agrupa las filas por VALE y prepara los datos para guardar"""
+    movimientos = {}
+    
+    for idx, row in df.iterrows():
+        vale = str(row.get('VALE', '')).strip()
+        
+        if not vale:
+            continue
+        
+        if vale not in movimientos:
+            # Crear nuevo movimiento
+            fecha = row.get('Fecha')
+            guardia = str(row.get('Guardia', '')).strip()
+            
+            # Deducir turno: N → NOCHE, D → DIA
+            turno = "NOCHE" if guardia.upper() == "N" else "DIA"
+            
+            operador = str(row.get('Operador', '')).strip()
+            equipo = str(row.get('Equipo', '')).strip()
+            
+            # Buscar operador para obtener guardia
+            guardia_bd = None
+            if operador:
+                op_data = db.client.table("operador").select("guardia").eq("nombre", operador).execute()
+                if op_data.data:
+                    guardia_bd = op_data.data[0].get('guardia')
+            
+            # Buscar equipo para obtener compañía
+            compania = None
+            if equipo:
+                eq_data = db.client.table("equipo").select("compania").eq("equipo", equipo).execute()
+                if eq_data.data:
+                    compania = eq_data.data[0].get('compania')
+            
+            estado = str(row.get('Estado', '')).strip() if pd.notna(row.get('Estado')) else None
+            
+            movimientos[vale] = {
+                "fecha": fecha,
+                "mes": mes,
+                "ano": ano,
+                "turno": turno,
+                "guia": vale,
+                "movimiento": "SALIDA",
+                "estado": estado,
+                "operador": operador,
+                "guardia": guardia_bd,
+                "equipo": equipo,
+                "tipo_perforacion": str(row.get('Tipo Perforacion', '')).strip() if pd.notna(row.get('Tipo Perforacion')) else None,
+                "compania": compania,
+                "detalles": []
+            }
+        
+        # Agregar detalle
+        cantidad = float(row.get('Cant.', 0)) if pd.notna(row.get('Cant.')) else 0
+        # Siempre negativo (SALIDA)
+        cantidad = -abs(cantidad)
+        
+        movimientos[vale]["detalles"].append({
+            "brazo": str(row.get('Brazo', '')).strip() if pd.notna(row.get('Brazo')) else None,
+            "codigo": str(row.get('Codigo', '')).strip(),
+            "descripcion": str(row.get('Descripcion', '')).strip() if pd.notna(row.get('Descripcion')) else "",
+            "cantidad": cantidad,
+            "razon": str(row.get('MOTIVO', '')).strip() if pd.notna(row.get('MOTIVO')) else None
+        })
+    
+    return list(movimientos.values())
+
+
 
 # ============================================================
 # ENDPOINTS DE AUTENTICACIÓN
