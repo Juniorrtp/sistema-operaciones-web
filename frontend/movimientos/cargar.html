@@ -271,55 +271,52 @@
         // FUNCIÓN PARA CARGAR MOVIMIENTOS DESDE EXCEL
         // ============================================================
         async function cargarMovimientosExcel(file, mes, ano, prueba = false) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('mes', mes);
-            formData.append('ano', ano.toString());
-            formData.append('prueba', prueba ? 'true' : 'false');
-            
-            const response = await fetch(`${API_URL}/movimientos/cargar-excel`, {
-                method: 'POST',
-                body: formData,
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('mes', mes);
+        formData.append('ano', ano.toString());
+        formData.append('prueba', prueba ? 'true' : 'false');
+        
+        const response = await fetch(`${API_URL}/movimientos/cargar-excel`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || 'Error al cargar movimientos');
+        }
+        
+        return data;
+    }
+
+        async function descargarPlantilla() {
+        try {
+            const response = await fetch(`${API_URL}/movimientos/plantilla-excel`, {
                 credentials: 'include'
             });
             
-            const data = await response.json();
-            
             if (!response.ok) {
-                throw new Error(data.message || 'Error al cargar movimientos');
+                throw new Error('Error al descargar la plantilla');
             }
             
-            return data;
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'plantilla_movimientos.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error descargando plantilla:', error);
+            mostrarResultado('error', '❌ Error al descargar la plantilla: ' + error.message);
         }
-
-        // ============================================================
-        // FUNCIÓN PARA DESCARGAR PLANTILLA
-        // ============================================================
-        async function descargarPlantilla() {
-            try {
-                const response = await fetch(`${API_URL}/movimientos/plantilla-excel`, {
-                    credentials: 'include'
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Error al descargar la plantilla');
-                }
-                
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'plantilla_movimientos.xlsx';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Error descargando plantilla:', error);
-                mostrarResultado('error', '❌ Error al descargar la plantilla: ' + error.message);
-            }
-        }
-
+    }
+        
         // ============================================================
         // VARIABLES
         // ============================================================
