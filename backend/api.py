@@ -79,6 +79,35 @@ def verify_request(request: Request):
 # FUNCIONES PARA CARGA MASIVA DE MOVIMIENTOS
 # ============================================================
 
+def convertir_fecha(fecha):
+    """Convierte una fecha a formato YYYY-MM-DD"""
+    if pd.isna(fecha) or fecha is None:
+        return None
+    
+    # Si es un objeto datetime
+    if hasattr(fecha, 'strftime'):
+        return fecha.strftime('%Y-%m-%d')
+    
+    # Si es string
+    fecha_str = str(fecha).strip()
+    
+    # Formato DD/MM/YYYY
+    if '/' in fecha_str:
+        partes = fecha_str.split('/')
+        if len(partes) == 3:
+            if len(partes[0]) == 4:
+                # YYYY/MM/DD
+                return f"{partes[0]}-{partes[1]}-{partes[2]}"
+            else:
+                # DD/MM/YYYY
+                return f"{partes[2]}-{partes[1]}-{partes[0]}"
+    
+    # Formato YYYY-MM-DD (ya está bien)
+    if '-' in fecha_str:
+        return fecha_str
+    
+    return fecha_str
+
 def validar_operadores_y_equipos(df, db):
     """Valida que todos los operadores y equipos existan en la BD"""
     errores = []
@@ -112,7 +141,7 @@ def validar_duplicados(df, db):
     for idx, row in df.iterrows():
         numero_fila = idx + 2
         vale = str(row.get('VALE', '')).strip()
-        fecha = row.get('Fecha')
+        fecha = convertir_fecha(row.get('Fecha'))
         
         if not vale or pd.isna(fecha):
             continue
@@ -134,6 +163,7 @@ def validar_duplicados(df, db):
             errores.append(f"❌ Fila {numero_fila}: VALE '{vale}' ya existe para la fecha {fecha_str}")
     
     return errores
+
 def agrupar_por_vale(df, mes, ano, db):
     """Agrupa las filas por VALE y prepara los datos para guardar"""
     movimientos = {}
@@ -145,17 +175,76 @@ def agrupar_por_vale(df, mes, ano, db):
             continue
         
         if vale not in movimientos:
-            # ✅ Convertir fecha a string
-            fecha = row.get('Fecha')
-            if hasattr(fecha, 'strftime'):
-                fecha = fecha.strftime('%Y-%m-%d')
-            else:
-                fecha = str(fecha).strip()
+            # Crear nuevo movimiento
             
+            fecha = convertir_fecha(row.get('Fecha'))
             guardia = str(row.get('Guardia', '')).strip()
+            
+            # Deducir turno: N → NOCHE, D → DIA
             turno = "NOCHE" if guardia.upper() == "N" else "DIA"
             
-            # ... resto del código igual ...
+            operador = str(row.get('Operador', '')).strip()
+            equipo = str(row.get('Equipo', '')).strip()
+            
+            # Buscar operador para obtener guardia
+            guardia_bd = None
+            if operador:
+                op_data = db.client.table("operador").select("guardia").eq("nombre", operador).execute()
+                if op_data.data:
+                    guardia_bd = op_data.data[0].get('guardia')
+            
+            # Buscar equipo para obtener compañía
+            compania = None
+            if equipo:
+                eq_data = db.client.table("equipo").select("compania").eq("equipo", equipo).execute()
+                if eq_data.data:
+                    compania = eq_data.data[0].get('compania')
+            
+            estado = str(row.get('Estado', '')).strip() if pd.notna(row.get('Estado')) else None
+            
+            movimientos[vale] = {
+                "fecha": fecha,
+                "mes": mes,
+                "ano": ano,
+                "turno": turno,
+                "guia": vale,
+                "movimiento": "SALIDA",
+                "estado": estado,
+                "operador": operador,
+                "guardia": guardia_bd,
+                "equipo": equipo,
+                "tipo_perforacion": str(row.get('Tipo Perforacion', '')).strip() if pd.notna(row.get('Tipo Perforacion')) else None,
+                "compania": compania,
+                "detalles": []
+            }
+        
+        # Agregar detalle
+        cantidad = float(row.get('Cant.', 0)) if pd.notna(row.get('Cant.')) else 0
+        # Siempre negativo (SALIDA)
+        cantidad = -abs(cantidad)
+        
+        # ============================================================
+        # CONVERTIR BRAZO: I → BRAZO 1, D → BRAZO 2
+        # ============================================================
+        brazo_raw = str(row.get('Brazo', '')).strip() if pd.notna(row.get('Brazo')) else ''
+        brazo_convertido = None
+
+        if brazo_raw.upper() == 'I':
+            brazo_convertido = 'BRAZO 1'
+        elif brazo_raw.upper() == 'D':
+            brazo_convertido = 'BRAZO 2'
+        elif brazo_raw:  # Si tiene otro valor, lo dejamos tal cual
+            brazo_convertido = brazo_raw
+        
+        movimientos[vale]["detalles"].append({
+            "brazo": brazo_convertido,
+            "codigo": str(row.get('Codigo', '')).strip(),
+            "descripcion": str(row.get('Descripcion', '')).strip() if pd.notna(row.get('Descripcion')) else "",
+            "cantidad": cantidad,
+            "razon": str(row.get('MOTIVO', '')).strip() if pd.notna(row.get('MOTIVO')) else None
+        })
+    
+    return list(movimientos.values())
 
 # ============================================================
 # ENDPOINTS DE AUTENTICACIÓN
