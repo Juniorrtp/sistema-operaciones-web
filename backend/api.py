@@ -134,35 +134,6 @@ def validar_operadores_y_equipos(df, db):
     return errores
 
 
-def validar_duplicados(df, db):
-    """Valida que no existan VALE + Fecha ya cargados"""
-    errores = []
-    
-    for idx, row in df.iterrows():
-        numero_fila = idx + 2
-        vale = str(row.get('VALE', '')).strip()
-        fecha = convertir_fecha(row.get('Fecha'))
-        
-        if not vale or pd.isna(fecha):
-            continue
-        
-        # ✅ Convertir fecha a string
-        if hasattr(fecha, 'strftime'):
-            fecha_str = fecha.strftime('%Y-%m-%d')
-        else:
-            fecha_str = str(fecha).strip()
-        
-        # Verificar si ya existe
-        existe = db.client.table("movimiento_general") \
-            .select("id") \
-            .eq("guia", vale) \
-            .eq("fecha", fecha_str) \
-            .execute()
-        
-        if existe.data:
-            errores.append(f"❌ Fila {numero_fila}: VALE '{vale}' ya existe para la fecha {fecha_str}")
-    
-    return errores
 
 def agrupar_por_vale(df, mes, ano, db):
     """Agrupa las filas por VALE y prepara los datos para guardar"""
@@ -432,21 +403,27 @@ async def startup_event():
     print("🚀 INICIANDO API...")
     actualizar_cache_stock()
 
+
 @app.post("/api/movimientos/cargar-excel")
 async def cargar_movimientos_excel(
     file: UploadFile = File(...),
     mes: str = Form(...),
-    ano: int = Form(...)
+    ano: int = Form(...),
+    prueba: bool = Form(False)
 ):
-    """Carga masiva de movimientos desde Excel"""
+    """Carga masiva de movimientos desde Excel (actualiza si existe)"""
     try:
         db = get_db()
         
-        # 1. Leer Excel
+        # ============================================================
+        # 1. LEER EXCEL
+        # ============================================================
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
         
-        # 2. Validar columnas requeridas
+        # ============================================================
+        # 2. VALIDAR COLUMNAS REQUERIDAS
+        # ============================================================
         columnas_requeridas = ['VALE', 'Fecha', 'Guardia', 'Operador', 'Equipo', 
                                'Tipo Perforacion', 'Estado', 'Codigo', 'Descripcion', 
                                'Cant.', 'Brazo', 'MOTIVO']
@@ -459,7 +436,9 @@ async def cargar_movimientos_excel(
                     "errores": [f"Columna requerida: '{col}'"]
                 }
         
-        # 3. Validar operadores y equipos
+        # ============================================================
+        # 3. VALIDAR OPERADORES Y EQUIPOS
+        # ============================================================
         errores = validar_operadores_y_equipos(df, db)
         if errores:
             return {
@@ -468,16 +447,9 @@ async def cargar_movimientos_excel(
                 "errores": errores
             }
         
-        # 4. Validar duplicados
-        errores_dup = validar_duplicados(df, db)
-        if errores_dup:
-            return {
-                "success": False,
-                "message": "❌ El archivo tiene duplicados. No se guardó nada.",
-                "errores": errores_dup
-            }
-        
-        # 5. Agrupar por VALE
+        # ============================================================
+        # 4. AGRUPAR POR VALE
+        # ============================================================
         movimientos = agrupar_por_vale(df, mes, ano, db)
         
         if not movimientos:
@@ -487,37 +459,73 @@ async def cargar_movimientos_excel(
                 "errores": ["El archivo está vacío o no tiene datos válidos"]
             }
         
-        # 6. Guardar en la base de datos
+        # ============================================================
+        # 5. MODO PRUEBA (No guarda)
+        # ============================================================
+        if prueba:
+            return {
+                "success": True,
+                "message": "✅ Modo PRUEBA: La carga se ve bien. No se guardó nada.",
+                "prueba": True,
+                "movimientos": len(movimientos),
+                "detalles": sum(len(m['detalles']) for m in movimientos),
+                "errores": []
+            }
+        
+        # ============================================================
+        # 6. GUARDAR (ACTUALIZAR O INSERTAR)
+        # ============================================================
         total_movimientos = 0
         total_detalles = 0
+        creados = 0
+        actualizados = 0
         
         for movimiento in movimientos:
             # Separar detalles
             detalles = movimiento.pop('detalles', [])
             
-            # Insertar cabecera
-            result = db.client.table("movimiento_general").insert(movimiento).execute()
+            # ✅ Verificar si ya existe (VALE + Fecha)
+            existe = db.client.table("movimiento_general") \
+                .select("id") \
+                .eq("guia", movimiento['guia']) \
+                .eq("fecha", movimiento['fecha']) \
+                .execute()
             
-            if not result.data:
-                continue
+            if existe.data:
+                # ✅ ACTUALIZAR existente
+                movimiento_id = existe.data[0]['id']
+                db.client.table("movimiento_general").update(movimiento).eq("id", movimiento_id).execute()
+                
+                # Eliminar detalles viejos
+                db.client.table("movimiento_detalles").delete().eq("entrega_id", movimiento_id).execute()
+                
+                actualizados += 1
+            else:
+                # ✅ INSERTAR nuevo
+                result = db.client.table("movimiento_general").insert(movimiento).execute()
+                movimiento_id = result.data[0]['id']
+                creados += 1
             
-            movimiento_id = result.data[0]['id']
             total_movimientos += 1
             
-            # Insertar detalles
+            # Insertar detalles nuevos
             for detalle in detalles:
                 detalle['entrega_id'] = movimiento_id
                 db.client.table("movimiento_detalles").insert(detalle).execute()
                 total_detalles += 1
         
-        # 7. Actualizar cache de stock
+        # ============================================================
+        # 7. ACTUALIZAR CACHE DE STOCK
+        # ============================================================
         actualizar_cache_stock()
         
         return {
             "success": True,
-            "message": f"✅ Carga exitosa: {total_movimientos} movimientos y {total_detalles} detalles creados.",
+            "message": f"✅ Carga exitosa: {creados} creados, {actualizados} actualizados, {total_detalles} detalles.",
             "movimientos": total_movimientos,
-            "detalles": total_detalles
+            "detalles": total_detalles,
+            "creados": creados,
+            "actualizados": actualizados
         }
         
     except Exception as e:
