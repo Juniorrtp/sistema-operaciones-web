@@ -134,7 +134,6 @@ def validar_operadores_y_equipos(df, db):
     return errores
 
 
-
 def agrupar_por_vale(df, mes, ano, db):
     """Agrupa las filas por VALE y prepara los datos para guardar"""
     movimientos = {}
@@ -146,12 +145,10 @@ def agrupar_por_vale(df, mes, ano, db):
             continue
         
         if vale not in movimientos:
-            # Crear nuevo movimiento
-            
+            # ✅ Convertir fecha
             fecha = convertir_fecha(row.get('Fecha'))
-            guardia = str(row.get('Guardia', '')).strip()
             
-            # Deducir turno: N → NOCHE, D → DIA
+            guardia = str(row.get('Guardia', '')).strip()
             turno = "NOCHE" if guardia.upper() == "N" else "DIA"
             
             operador = str(row.get('Operador', '')).strip()
@@ -179,7 +176,7 @@ def agrupar_por_vale(df, mes, ano, db):
                 "ano": ano,
                 "turno": turno,
                 "guia": vale,
-                "movimiento": "SALIDA",
+                "movimiento": "SALIDA",  # ✅ Siempre SALIDA
                 "estado": estado,
                 "operador": operador,
                 "guardia": guardia_bd,
@@ -188,11 +185,6 @@ def agrupar_por_vale(df, mes, ano, db):
                 "compania": compania,
                 "detalles": []
             }
-        
-        # Agregar detalle
-        cantidad = float(row.get('Cant.', 0)) if pd.notna(row.get('Cant.')) else 0
-        # Siempre negativo (SALIDA)
-        cantidad = -abs(cantidad)
         
         # ============================================================
         # CONVERTIR BRAZO: I → BRAZO 1, D → BRAZO 2
@@ -204,18 +196,46 @@ def agrupar_por_vale(df, mes, ano, db):
             brazo_convertido = 'BRAZO 1'
         elif brazo_raw.upper() == 'D':
             brazo_convertido = 'BRAZO 2'
-        elif brazo_raw:  # Si tiene otro valor, lo dejamos tal cual
+        elif brazo_raw:
             brazo_convertido = brazo_raw
+        
+        # ============================================================
+        # ✅ OBTENER FAMILIA DESDE LA TABLA ACEROS
+        # ============================================================
+        codigo = str(row.get('Codigo', '')).strip()
+        familia = None
+        
+        if codigo:
+            try:
+                acero_data = db.client.table("aceros") \
+                    .select("familia") \
+                    .eq("codigo", codigo) \
+                    .execute()
+                if acero_data.data:
+                    familia = acero_data.data[0].get('familia')
+                    print(f"✅ Familia encontrada para {codigo}: {familia}")
+                else:
+                    print(f"⚠️ No se encontró familia para el código: {codigo}")
+            except Exception as e:
+                print(f"❌ Error buscando familia para {codigo}: {e}")
+        
+        # ============================================================
+        # ✅ CANTIDAD SIEMPRE NEGATIVA (SALIDA)
+        # ============================================================
+        cantidad = float(row.get('Cant.', 0)) if pd.notna(row.get('Cant.')) else 0
+        cantidad = -abs(cantidad)  # ✅ Siempre negativo
         
         movimientos[vale]["detalles"].append({
             "brazo": brazo_convertido,
-            "codigo": str(row.get('Codigo', '')).strip(),
+            "codigo": codigo,
             "descripcion": str(row.get('Descripcion', '')).strip() if pd.notna(row.get('Descripcion')) else "",
-            "cantidad": cantidad,
+            "familia": familia,  # ✅ Familia desde tabla aceros
+            "cantidad": cantidad,  # ✅ Siempre negativo
             "razon": str(row.get('MOTIVO', '')).strip() if pd.notna(row.get('MOTIVO')) else None
         })
     
     return list(movimientos.values())
+
 
 # ============================================================
 # ENDPOINTS DE AUTENTICACIÓN
