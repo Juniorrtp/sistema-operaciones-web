@@ -30,10 +30,6 @@ st.title("🚜 Equipos - Rendimiento y Consumo")
 
 
 
-# ============================================
-# CARGA DE DATOS CON CACHÉ
-# ============================================
-
 @st.cache_data(ttl=300)
 def load_movimientos_general(fecha_desde=None, fecha_hasta=None):
     params = {"limit": 5000}
@@ -89,8 +85,138 @@ def load_metros_detalles():
     return fetch_from_api("metros-detalles")
 
 # ============================================
-# FUNCIÓN: ESTADO ACTUAL (SIN FILTROS)
+# FUNCIÓN: HISTÓRICO CON EQUIPO-BRAZO
 # ============================================
+
+@st.cache_data(ttl=600)
+def process_historico_brazos(equipo_seleccionado, meses_atras=12, año_filtro=None):
+    """Procesa el histórico de un equipo con todos sus brazos"""
+    
+    familias_target = ['SHANK', 'ACOPLES', 'BARRAS']
+    
+    logger.info(f"🔍 HISTÓRICO - Equipo: {equipo_seleccionado}, Meses atrás: {meses_atras}, Año: {año_filtro}")
+    
+    # Cargar datos
+    mov_detalles = load_movimientos_detalles()
+    met_detalles = load_metros_detalles()
+    
+    # Filtrar movimientos generales (SALIDA) para el equipo específico
+    df_mov_gen = pd.DataFrame(load_movimientos_general())
+    
+    df_mov_gen_filtrado = df_mov_gen[
+        (df_mov_gen['movimiento'] == 'SALIDA') &
+        (df_mov_gen['equipo'] == equipo_seleccionado)
+    ]
+    
+    if año_filtro and año_filtro != "TODOS":
+        df_mov_gen_filtrado = df_mov_gen_filtrado[df_mov_gen_filtrado['ano'] == int(año_filtro)]
+    
+    if meses_atras:
+        fecha_corte = datetime.now() - timedelta(days=meses_atras * 30)
+        df_mov_gen_filtrado = df_mov_gen_filtrado[
+            pd.to_datetime(df_mov_gen_filtrado['fecha']) >= fecha_corte
+        ]
+    
+    if df_mov_gen_filtrado.empty:
+        logger.warning(f"⚠️ No hay movimientos para el equipo {equipo_seleccionado}")
+        return {}
+    
+    logger.info(f"📊 Movimientos encontrados: {len(df_mov_gen_filtrado)}")
+    
+    # Obtener movimientos IDs
+    mov_ids = df_mov_gen_filtrado['id'].tolist()
+    
+    # Obtener detalles de movimientos
+    df_mov_det = pd.DataFrame(mov_detalles)
+    df_mov_det_filtrado = df_mov_det[
+        (df_mov_det['entrega_id'].isin(mov_ids)) &
+        (df_mov_det['familia'].str.upper().isin(familias_target))
+    ]
+    
+    if df_mov_det_filtrado.empty:
+        logger.warning(f"⚠️ No hay detalles para el equipo {equipo_seleccionado}")
+        return {}
+    
+    # UNIR con generales para obtener fecha
+    df_mov_det_filtrado = df_mov_det_filtrado.merge(
+        df_mov_gen_filtrado[['id', 'fecha']],
+        left_on='entrega_id',
+        right_on='id',
+        how='left'
+    )
+    
+    # Crear columna equipo_brazo
+    df_mov_det_filtrado['equipo_brazo'] = df_mov_det_filtrado.apply(
+        lambda row: f"{equipo_seleccionado}-{row['brazo']}" if pd.notna(row.get('brazo')) and row['brazo'] != '' else equipo_seleccionado,
+        axis=1
+    )
+    
+    df_mov_det_filtrado = df_mov_det_filtrado.sort_values('fecha')
+    
+    # Cargar metros
+    df_met_gen = pd.DataFrame(load_metros_general())
+    df_met_gen_filtrado = df_met_gen[df_met_gen['equipo'] == equipo_seleccionado]
+    
+    if df_met_gen_filtrado.empty:
+        logger.warning(f"⚠️ No hay metros para el equipo {equipo_seleccionado}")
+        return {}
+    
+    df_met_det = pd.DataFrame(met_detalles)
+    met_ids = df_met_gen_filtrado['id'].tolist()
+    df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
+    
+    # Obtener todas las combinaciones equipo_brazo
+    combinaciones = df_mov_det_filtrado['equipo_brazo'].unique()
+    
+    resultados = {}
+    
+    for combinacion in combinaciones:
+        df_combinacion = df_mov_det_filtrado[df_mov_det_filtrado['equipo_brazo'] == combinacion]
+        
+        for familia in familias_target:
+            df_familia = df_combinacion[
+                df_combinacion['familia'].str.upper() == familia
+            ]
+            
+            if df_familia.empty:
+                continue
+            
+            fechas = df_familia['fecha'].unique()
+            fechas = sorted(fechas)
+            
+            historico = []
+            
+            for i, fecha_ini in enumerate(fechas):
+                if i < len(fechas) - 1:
+                    fecha_fin = fechas[i + 1]
+                else:
+                    fecha_fin = datetime.now().date()
+                
+                df_met_rango = df_met_gen_filtrado[
+                    (pd.to_datetime(df_met_gen_filtrado['fecha']) >= pd.to_datetime(fecha_ini)) &
+                    (pd.to_datetime(df_met_gen_filtrado['fecha']) < pd.to_datetime(fecha_fin))
+                ]
+                
+                met_ids_rango = df_met_rango['id'].tolist()
+                df_met_det_rango = df_met_det_filtrado[
+                    df_met_det_filtrado['registro_id'].isin(met_ids_rango)
+                ]
+                
+                metros = df_met_det_rango['total_mp'].sum()
+                
+                historico.append({
+                    'Fecha_Inicio': fecha_ini,
+                    'Fecha_Fin': fecha_fin,
+                    'Metros': metros
+                })
+            
+            if historico:
+                key = f"{combinacion} - {familia}"
+                resultados[key] = pd.DataFrame(historico)
+    
+    logger.info(f"✅ Histórico generado para {len(resultados)} combinaciones")
+    
+    return resultados
 
 @st.cache_data(ttl=300)
 def process_estado_actual():
@@ -246,13 +372,7 @@ def process_estado_actual():
     
     return tabla_pivot, df_resultado
 
-# ============================================
-# FUNCIÓN: TABLA DEL MES
-# ============================================
 
-# ============================================
-# FUNCIÓN: TABLA DEL MES (CORREGIDA)
-# ============================================
 
 @st.cache_data(ttl=300)
 def process_tabla_mes(año, mes, compania):
@@ -384,7 +504,6 @@ def process_tabla_mes(año, mes, compania):
     
     df_resultado = pd.DataFrame(resultados)
     
-    # Pivotear para tabla de doble entrada
     pivot_entregas = df_resultado.pivot_table(
         index='Equipo_Brazo',
         columns='Familia',
@@ -409,9 +528,6 @@ def process_tabla_mes(año, mes, compania):
     
     return pivot_entregas[columnas_orden], pivot_rendimiento[columnas_orden]
 
-# ============================================
-# FUNCIÓN: HISTÓRICO DE EQUIPOS
-# ============================================
 
 @st.cache_data(ttl=600)
 def process_historico(equipo_seleccionado, meses_atras=12, año_filtro=None):
@@ -531,9 +647,6 @@ def process_historico(equipo_seleccionado, meses_atras=12, año_filtro=None):
     
     return resultados
 
-# ============================================
-# CARGAR DATOS PARA FILTROS
-# ============================================
 
 with st.spinner("Cargando datos..."):
     movimientos_data = load_movimientos_general()
@@ -725,10 +838,117 @@ with tab2:
 # TAB 3: HISTÓRICO
 # ============================================
 # ============================================
+# ============================================
 # TAB 3: HISTÓRICO (CON EQUIPO-BRAZO)
 # ============================================
 
 with tab3:
+    st.subheader("📈 Histórico de Equipos por Familia y Brazo")
+    st.caption("📌 Muestra el histórico de metros perforados entre entregas para cada combinación Equipo-Brazo")
+    
+    # Filtros específicos para histórico
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if equipos_disponibles:
+            equipo_historico = st.selectbox(
+                "🚜 Seleccionar Equipo",
+                equipos_disponibles,
+                key="equipo_historico"
+            )
+        else:
+            st.warning("No hay equipos disponibles")
+            equipo_historico = None
+    
+    with col2:
+        meses_opciones = {
+            "Últimos 3 meses": 3,
+            "Últimos 6 meses": 6,
+            "Último año": 12,
+            "Últimos 2 años": 24,
+            "Todo": None
+        }
+        rango_seleccionado = st.selectbox(
+            "📅 Rango de tiempo",
+            list(meses_opciones.keys()),
+            index=2,
+            key="rango_historico"
+        )
+        meses_atras = meses_opciones[rango_seleccionado]
+    
+    with col3:
+        años_historico = ["TODOS"] + [str(a) for a in años_disponibles]
+        año_historico = st.selectbox(
+            "📅 Año específico",
+            años_historico,
+            index=0,
+            key="año_historico"
+        )
+    
+    # Botón para generar histórico
+    if equipo_historico is not None:
+        if st.button("🔍 Generar Histórico", key="btn_historico"):
+            with st.spinner("Generando histórico..."):
+                historico_data = process_historico_brazos(
+                    equipo_historico,
+                    meses_atras,
+                    año_historico if año_historico != "TODOS" else None
+                )
+            
+            if historico_data:
+                # Ordenar las claves para mostrar de forma organizada
+                claves_ordenadas = sorted(historico_data.keys())
+                
+                # Agrupar por combinación Equipo-Brazo
+                for clave in claves_ordenadas:
+                    df_hist = historico_data[clave]
+                    
+                    if not df_hist.empty:
+                        # Extraer combinación y familia
+                        partes = clave.split(" - ")
+                        combinacion = partes[0]
+                        familia = partes[1] if len(partes) > 1 else "General"
+                        
+                        # Mostrar como sección expandible
+                        with st.expander(f"📌 {combinacion} - {familia}", expanded=False):
+                            # Formatear fechas
+                            df_hist['Fecha_Inicio'] = pd.to_datetime(df_hist['Fecha_Inicio']).dt.date
+                            df_hist['Fecha_Fin'] = pd.to_datetime(df_hist['Fecha_Fin']).dt.date
+                            
+                            # Mostrar tabla
+                            st.dataframe(
+                                df_hist,
+                                column_config={
+                                    "Fecha_Inicio": st.column_config.DateColumn("Fecha Inicio"),
+                                    "Fecha_Fin": st.column_config.DateColumn("Fecha Fin"),
+                                    "Metros": st.column_config.NumberColumn("Metros", format="%.2f")
+                                },
+                                hide_index=True,
+                                use_container_width=True
+                            )
+                            
+                            # Gráfico de evolución
+                            if len(df_hist) > 1:
+                                fig = px.line(
+                                    df_hist,
+                                    x='Fecha_Inicio',
+                                    y='Metros',
+                                    title=f"Evolución de Metros - {combinacion} - {familia}",
+                                    markers=True,
+                                    labels={'Metros': 'Metros', 'Fecha_Inicio': 'Fecha'}
+                                )
+                                fig.update_layout(
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    height=300
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.info("ℹ️ Solo hay un registro, no se puede generar gráfico de evolución")
+            else:
+                st.warning(f"No hay datos históricos para el equipo {equipo_historico}")
+    else:
+        st.info("ℹ️ No hay equipos disponibles para mostrar el histórico")
     st.subheader("📈 Histórico de Equipos por Familia y Brazo")
     st.caption("📌 Muestra el histórico de metros perforados entre entregas para cada combinación Equipo-Brazo")
     
@@ -777,135 +997,135 @@ with tab3:
     
     @st.cache_data(ttl=600)
     def process_historico_brazos(equipo_seleccionado, meses_atras=12, año_filtro=None):
-        """Procesa el histórico de un equipo con todos sus brazos"""
-        
-        familias_target = ['SHANK', 'ACOPLES', 'BARRAS']
-        
-        logger.info(f"🔍 HISTÓRICO - Equipo: {equipo_seleccionado}, Meses atrás: {meses_atras}, Año: {año_filtro}")
-        
-        # Cargar datos
-        mov_detalles = load_movimientos_detalles()
-        met_detalles = load_metros_detalles()
-        
-        # Filtrar movimientos generales (SALIDA) para el equipo específico
-        df_mov_gen = pd.DataFrame(load_movimientos_general())
-        
-        df_mov_gen_filtrado = df_mov_gen[
-            (df_mov_gen['movimiento'] == 'SALIDA') &
-            (df_mov_gen['equipo'] == equipo_seleccionado)
-        ]
-        
-        if año_filtro and año_filtro != "TODOS":
-            df_mov_gen_filtrado = df_mov_gen_filtrado[df_mov_gen_filtrado['ano'] == int(año_filtro)]
-        
-        if meses_atras:
-            fecha_corte = datetime.now() - timedelta(days=meses_atras * 30)
-            df_mov_gen_filtrado = df_mov_gen_filtrado[
-                pd.to_datetime(df_mov_gen_filtrado['fecha']) >= fecha_corte
-            ]
-        
-        if df_mov_gen_filtrado.empty:
-            logger.warning(f"⚠️ No hay movimientos para el equipo {equipo_seleccionado}")
-            return {}
-        
-        logger.info(f"📊 Movimientos encontrados: {len(df_mov_gen_filtrado)}")
-        
-        # Obtener movimientos IDs
-        mov_ids = df_mov_gen_filtrado['id'].tolist()
-        
-        # Obtener detalles de movimientos
-        df_mov_det = pd.DataFrame(mov_detalles)
-        df_mov_det_filtrado = df_mov_det[
-            (df_mov_det['entrega_id'].isin(mov_ids)) &
-            (df_mov_det['familia'].str.upper().isin(familias_target))
-        ]
-        
-        if df_mov_det_filtrado.empty:
-            logger.warning(f"⚠️ No hay detalles para el equipo {equipo_seleccionado}")
-            return {}
-        
-        # UNIR con generales para obtener fecha
-        df_mov_det_filtrado = df_mov_det_filtrado.merge(
-            df_mov_gen_filtrado[['id', 'fecha']],
-            left_on='entrega_id',
-            right_on='id',
-            how='left'
-        )
-        
-        # Crear columna equipo_brazo
-        df_mov_det_filtrado['equipo_brazo'] = df_mov_det_filtrado.apply(
-            lambda row: f"{equipo_seleccionado}-{row['brazo']}" if pd.notna(row.get('brazo')) and row['brazo'] != '' else equipo_seleccionado,
-            axis=1
-        )
-        
-        df_mov_det_filtrado = df_mov_det_filtrado.sort_values('fecha')
-        
-        # Cargar metros
-        df_met_gen = pd.DataFrame(load_metros_general())
-        df_met_gen_filtrado = df_met_gen[df_met_gen['equipo'] == equipo_seleccionado]
-        
-        if df_met_gen_filtrado.empty:
-            logger.warning(f"⚠️ No hay metros para el equipo {equipo_seleccionado}")
-            return {}
-        
-        df_met_det = pd.DataFrame(met_detalles)
-        met_ids = df_met_gen_filtrado['id'].tolist()
-        df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
-        
-        # Obtener todas las combinaciones equipo_brazo
-        combinaciones = df_mov_det_filtrado['equipo_brazo'].unique()
-        
-        resultados = {}
-        
-        for combinacion in combinaciones:
-            # Filtrar por esta combinación
-            df_combinacion = df_mov_det_filtrado[df_mov_det_filtrado['equipo_brazo'] == combinacion]
-            
-            # Procesar por cada familia
-            for familia in familias_target:
-                df_familia = df_combinacion[
-                    df_combinacion['familia'].str.upper() == familia
-                ]
-                
-                if df_familia.empty:
-                    continue
-                
-                fechas = df_familia['fecha'].unique()
-                fechas = sorted(fechas)
-                
-                historico = []
-                
-                for i, fecha_ini in enumerate(fechas):
-                    if i < len(fechas) - 1:
-                        fecha_fin = fechas[i + 1]
-                    else:
-                        fecha_fin = datetime.now().date()
-                    
-                    df_met_rango = df_met_gen_filtrado[
-                        (pd.to_datetime(df_met_gen_filtrado['fecha']) >= pd.to_datetime(fecha_ini)) &
-                        (pd.to_datetime(df_met_gen_filtrado['fecha']) < pd.to_datetime(fecha_fin))
-                    ]
-                    
-                    met_ids_rango = df_met_rango['id'].tolist()
-                    df_met_det_rango = df_met_det_filtrado[
-                        df_met_det_filtrado['registro_id'].isin(met_ids_rango)
-                    ]
-                    
-                    metros = df_met_det_rango['total_mp'].sum()
-                    
-                    historico.append({
-                        'Fecha_Inicio': fecha_ini,
-                        'Fecha_Fin': fecha_fin,
-                        'Metros': metros
-                    })
-                
-                if historico:
-                    key = f"{combinacion} - {familia}"
-                    resultados[key] = pd.DataFrame(historico)
-        
-        logger.info(f"✅ Histórico generado para {len(resultados)} combinaciones")
-        
-        return resultados
+         """Procesa el histórico de un equipo con todos sus brazos"""
+         
+         familias_target = ['SHANK', 'ACOPLES', 'BARRAS']
+         
+         logger.info(f"🔍 HISTÓRICO - Equipo: {equipo_seleccionado}, Meses atrás: {meses_atras}, Año: {año_filtro}")
+         
+         # Cargar datos
+         mov_detalles = load_movimientos_detalles()
+         met_detalles = load_metros_detalles()
+         
+         # Filtrar movimientos generales (SALIDA) para el equipo específico
+         df_mov_gen = pd.DataFrame(load_movimientos_general())
+         
+         df_mov_gen_filtrado = df_mov_gen[
+             (df_mov_gen['movimiento'] == 'SALIDA') &
+             (df_mov_gen['equipo'] == equipo_seleccionado)
+         ]
+         
+         if año_filtro and año_filtro != "TODOS":
+             df_mov_gen_filtrado = df_mov_gen_filtrado[df_mov_gen_filtrado['ano'] == int(año_filtro)]
+         
+         if meses_atras:
+             fecha_corte = datetime.now() - timedelta(days=meses_atras * 30)
+             df_mov_gen_filtrado = df_mov_gen_filtrado[
+                 pd.to_datetime(df_mov_gen_filtrado['fecha']) >= fecha_corte
+             ]
+         
+         if df_mov_gen_filtrado.empty:
+             logger.warning(f"⚠️ No hay movimientos para el equipo {equipo_seleccionado}")
+             return {}
+         
+         logger.info(f"📊 Movimientos encontrados: {len(df_mov_gen_filtrado)}")
+         
+         # Obtener movimientos IDs
+         mov_ids = df_mov_gen_filtrado['id'].tolist()
+         
+         # Obtener detalles de movimientos
+         df_mov_det = pd.DataFrame(mov_detalles)
+         df_mov_det_filtrado = df_mov_det[
+             (df_mov_det['entrega_id'].isin(mov_ids)) &
+             (df_mov_det['familia'].str.upper().isin(familias_target))
+         ]
+         
+         if df_mov_det_filtrado.empty:
+             logger.warning(f"⚠️ No hay detalles para el equipo {equipo_seleccionado}")
+             return {}
+         
+         # UNIR con generales para obtener fecha
+         df_mov_det_filtrado = df_mov_det_filtrado.merge(
+             df_mov_gen_filtrado[['id', 'fecha']],
+             left_on='entrega_id',
+             right_on='id',
+             how='left'
+         )
+         
+         # Crear columna equipo_brazo
+         df_mov_det_filtrado['equipo_brazo'] = df_mov_det_filtrado.apply(
+             lambda row: f"{equipo_seleccionado}-{row['brazo']}" if pd.notna(row.get('brazo')) and row['brazo'] != '' else equipo_seleccionado,
+             axis=1
+         )
+         
+         df_mov_det_filtrado = df_mov_det_filtrado.sort_values('fecha')
+         
+         # Cargar metros
+         df_met_gen = pd.DataFrame(load_metros_general())
+         df_met_gen_filtrado = df_met_gen[df_met_gen['equipo'] == equipo_seleccionado]
+         
+         if df_met_gen_filtrado.empty:
+             logger.warning(f"⚠️ No hay metros para el equipo {equipo_seleccionado}")
+             return {}
+         
+         df_met_det = pd.DataFrame(met_detalles)
+         met_ids = df_met_gen_filtrado['id'].tolist()
+         df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
+         
+         # Obtener todas las combinaciones equipo_brazo
+         combinaciones = df_mov_det_filtrado['equipo_brazo'].unique()
+         
+         resultados = {}
+         
+         for combinacion in combinaciones:
+             # Filtrar por esta combinación
+             df_combinacion = df_mov_det_filtrado[df_mov_det_filtrado['equipo_brazo'] == combinacion]
+             
+             # Procesar por cada familia
+             for familia in familias_target:
+                 df_familia = df_combinacion[
+                     df_combinacion['familia'].str.upper() == familia
+                 ]
+                 
+                 if df_familia.empty:
+                     continue
+                 
+                 fechas = df_familia['fecha'].unique()
+                 fechas = sorted(fechas)
+                 
+                 historico = []
+                 
+                 for i, fecha_ini in enumerate(fechas):
+                     if i < len(fechas) - 1:
+                         fecha_fin = fechas[i + 1]
+                     else:
+                         fecha_fin = datetime.now().date()
+                     
+                     df_met_rango = df_met_gen_filtrado[
+                         (pd.to_datetime(df_met_gen_filtrado['fecha']) >= pd.to_datetime(fecha_ini)) &
+                         (pd.to_datetime(df_met_gen_filtrado['fecha']) < pd.to_datetime(fecha_fin))
+                     ]
+                     
+                     met_ids_rango = df_met_rango['id'].tolist()
+                     df_met_det_rango = df_met_det_filtrado[
+                         df_met_det_filtrado['registro_id'].isin(met_ids_rango)
+                     ]
+                     
+                     metros = df_met_det_rango['total_mp'].sum()
+                     
+                     historico.append({
+                         'Fecha_Inicio': fecha_ini,
+                         'Fecha_Fin': fecha_fin,
+                         'Metros': metros
+                     })
+                 
+                 if historico:
+                     key = f"{combinacion} - {familia}"
+                     resultados[key] = pd.DataFrame(historico)
+         
+         logger.info(f"✅ Histórico generado para {len(resultados)} combinaciones")
+         
+         return resultados
     
     # ============================================
     # BOTÓN GENERAR HISTÓRICO
