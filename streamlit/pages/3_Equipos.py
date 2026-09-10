@@ -235,110 +235,125 @@ def process_estado_actual():
     df_mov_gen_filtrado = df_mov_gen[df_mov_gen['movimiento'] == 'SALIDA']
     
     if df_mov_gen_filtrado.empty:
-        logger.warning("⚠️ No hay movimientos SALIDA")
         return pd.DataFrame(), pd.DataFrame()
-    
-    logger.info(f"📊 Movimientos SALIDA encontrados: {len(df_mov_gen_filtrado)}")
     
     # Obtener detalles de movimientos
     df_mov_det = pd.DataFrame(mov_detalles)
     mov_ids = df_mov_gen_filtrado['id'].tolist()
     df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
     
-    # UNIR CON GENERALES PARA OBTENER EQUIPO Y FECHA
+    # Unir con generales
     df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen_filtrado[['id', 'equipo', 'fecha']],
+        df_mov_gen_filtrado[['id', 'equipo', 'fecha', 'tipo_perforacion']],
         left_on='entrega_id',
         right_on='id',
         how='left'
     )
     
-    # Filtrar solo las familias target
+    # Filtrar familias target
     df_mov_det_filtrado = df_mov_det_filtrado[
         df_mov_det_filtrado['familia'].str.upper().isin(familias_target)
     ]
     
     if df_mov_det_filtrado.empty:
-        logger.warning("⚠️ No hay detalles con familias target")
         return pd.DataFrame(), pd.DataFrame()
     
-    logger.info(f"📦 Detalles con familias target: {len(df_mov_det_filtrado)}")
-    
-    # Crear columna equipo_brazo
+    # Crear equipo_brazo
     df_mov_det_filtrado['equipo_brazo'] = df_mov_det_filtrado.apply(
         lambda row: f"{row['equipo']}-{row['brazo']}" if pd.notna(row.get('brazo')) and row['brazo'] != '' else row['equipo'],
         axis=1
     )
     
-    # Agrupar por equipo_brazo y familia para obtener la fecha más reciente
-    entregas_recientes = df_mov_det_filtrado.groupby(['equipo_brazo', 'familia']).agg({
+    # 🔍 DEBUG 1: Ver qué equipos y familias hay
+    print("=" * 60)
+    print("🔍 DEBUG 1: Movimientos filtrados")
+    print(f"Total movimientos: {len(df_mov_det_filtrado)}")
+    print(f"Equipos únicos: {df_mov_det_filtrado['equipo'].unique()[:10]}")
+    print(f"Familias únicas: {df_mov_det_filtrado['familia'].unique()}")
+    print(f"Tipos perforación únicos: {df_mov_det_filtrado['tipo_perforacion'].unique()}")
+    print("=" * 60)
+    
+    # Agrupar por equipo_brazo, familia, tipo_perforacion
+    entregas_recientes = df_mov_det_filtrado.groupby(
+        ['equipo_brazo', 'familia', 'tipo_perforacion', 'equipo']
+    ).agg({
         'fecha': 'max',
         'cantidad': lambda x: x.abs().sum()
     }).reset_index()
     
     entregas_recientes = entregas_recientes.rename(columns={'fecha': 'fecha_ultima_entrega'})
     
-    # 🔍 DEBUG: Mostrar fechas encontradas
-    logger.info("=" * 60)
-    logger.info("📅 FECHAS DE ÚLTIMA ENTREGA POR EQUIPO Y FAMILIA:")
-    for _, row in entregas_recientes.iterrows():
-        logger.info(f"   {row['equipo_brazo']} - {row['familia']}: {row['fecha_ultima_entrega']} (Cantidad: {row['cantidad']})")
-    logger.info("=" * 60)
+    # 🔍 DEBUG 2: Ver entregas recientes
+    print("=" * 60)
+    print("🔍 DEBUG 2: Entregas recientes (última por equipo/familia/tipo)")
+    print(f"Total: {len(entregas_recientes)}")
+    print(entregas_recientes.head(20).to_string())
+    print("=" * 60)
     
-    # Cargar TODOS los metros generales (sin filtro de mes)
+    # Cargar metros
     df_met_gen = pd.DataFrame(load_metros_general())
     
     if df_met_gen.empty:
-        logger.warning("⚠️ No hay metros")
         return pd.DataFrame(), pd.DataFrame()
     
-    logger.info(f"📊 Registros de metros encontrados: {len(df_met_gen)}")
-    
-    # Obtener metros detalles
     df_met_det = pd.DataFrame(met_detalles)
     met_ids = df_met_gen['id'].tolist()
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    logger.info(f"📦 Detalles de metros: {len(df_met_det_filtrado)}")
+    # Unir metros con tipo_perforacion
+    df_met_det_filtrado = df_met_det_filtrado.merge(
+        df_met_gen[['id', 'tipo_perforacion']],
+        left_on='registro_id',
+        right_on='id',
+        how='left'
+    )
     
-    # Para cada equipo_brazo y familia, calcular metros desde la última entrega
+    # 🔍 DEBUG 3: Ver metros disponibles
+    print("=" * 60)
+    print("🔍 DEBUG 3: Metros disponibles")
+    print(f"Total registros metros: {len(df_met_gen)}")
+    print(f"Equipos con metros: {df_met_gen['equipo'].unique()[:10]}")
+    print(f"Tipos perforación en metros: {df_met_gen['tipo_perforacion'].unique()}")
+    print("=" * 60)
+    
+    # Calcular metros por equipo
     resultados = []
     
     for _, row in entregas_recientes.iterrows():
         equipo_brazo = row['equipo_brazo']
+        equipo_base = row['equipo']
         familia = row['familia']
+        tipo_perf = row['tipo_perforacion']
         fecha_ultima = row['fecha_ultima_entrega']
         cantidad = row['cantidad']
         
-        # Obtener equipo base
-        equipo_base = equipo_brazo.split('-')[0]
+        # 🔍 DEBUG 4: Ver cada cálculo
+        print(f"🔍 Procesando: {equipo_brazo} | {familia} | {tipo_perf} | Última: {fecha_ultima}")
         
-        logger.info(f"🔍 Procesando: {equipo_brazo} - {familia} (Última entrega: {fecha_ultima})")
-        
-        # Buscar registros de metros para este equipo después de la fecha
+        # Filtrar metros
         met_ids_equipo = df_met_gen[
             (df_met_gen['equipo'] == equipo_base) &
+            (df_met_gen['tipo_perforacion'] == tipo_perf) &
             (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_ultima))
         ]['id'].tolist()
         
-        logger.info(f"   📍 IDs de metros encontrados: {len(met_ids_equipo)}")
+        print(f"   📍 IDs de metros encontrados: {len(met_ids_equipo)}")
         
-        # Filtrar metros_detalles por estos IDs
         df_met_equipo = df_met_det_filtrado[
             df_met_det_filtrado['registro_id'].isin(met_ids_equipo)
         ]
         
-        # Calcular metros según familia
         if familia.upper() == 'RIMADORAS':
             metros = df_met_equipo['mp_rimado'].sum()
         else:
             metros = df_met_equipo['total_mp'].sum()
         
-        logger.info(f"   📊 Metros calculados: {metros:.2f}")
+        print(f"   📊 Metros calculados: {metros:.2f}")
         
         resultados.append({
             'Equipo_Brazo': equipo_brazo,
             'Familia': familia,
+            'Tipo_Perforacion': tipo_perf,
             'Cantidad': cantidad,
             'Metros': metros,
             'Rendimiento': metros / cantidad if cantidad > 0 else 0,
@@ -346,29 +361,28 @@ def process_estado_actual():
         })
     
     if not resultados:
-        logger.warning("⚠️ No se generaron resultados")
         return pd.DataFrame(), pd.DataFrame()
     
     df_resultado = pd.DataFrame(resultados)
     
-    # Pivotear para tabla de doble entrada
-    tabla_pivot = df_resultado.pivot_table(
+    # Agrupar por Equipo_Brazo y Familia (sumando múltiples tipos)
+    df_resultado_agrupado = df_resultado.groupby(['Equipo_Brazo', 'Familia']).agg({
+        'Metros': 'sum'
+    }).reset_index()
+    
+    tabla_pivot = df_resultado_agrupado.pivot_table(
         index='Equipo_Brazo',
         columns='Familia',
         values='Metros',
         fill_value=0
     ).reset_index()
     
-    # Asegurar que todas las familias estén presentes
     for familia in familias_target:
         if familia not in tabla_pivot.columns:
             tabla_pivot[familia] = 0
     
-    # Reordenar columnas
     columnas_orden = ['Equipo_Brazo'] + familias_target
     tabla_pivot = tabla_pivot[columnas_orden]
-    
-    logger.info(f"✅ Tabla generada con {len(tabla_pivot)} filas")
     
     return tabla_pivot, df_resultado
 
@@ -690,6 +704,31 @@ with tab1:
     
     with st.spinner("Procesando datos..."):
         df_estado, df_detalle = process_estado_actual()
+
+    with st.expander("🔍 DEBUG - Ver datos crudos", expanded=False):
+        st.write("### 📊 Resumen de datos")
+        st.write(f"- df_estado filas: {len(df_estado) if not df_estado.empty else 0}")
+        st.write(f"- df_detalle filas: {len(df_detalle) if not df_detalle.empty else 0}")
+        
+        if not df_detalle.empty:
+            st.write("### 📋 Detalle completo (df_detalle)")
+            st.dataframe(df_detalle, use_container_width=True)
+            
+            st.write("### 📅 Fechas de última entrega por equipo")
+            for equipo in df_detalle['Equipo_Brazo'].unique()[:10]:  # Primeros 10
+                df_eq = df_detalle[df_detalle['Equipo_Brazo'] == equipo]
+                st.write(f"**{equipo}:**")
+                st.dataframe(df_eq[['Familia', 'Cantidad', 'Metros', 'Fecha_Ultima_Entrega']], hide_index=True)
+        
+        if not df_estado.empty:
+            st.write("### 📊 Tabla pivoteada (df_estado)")
+            st.dataframe(df_estado, use_container_width=True)
+
+
+
+
+
+    
     
     if not df_estado.empty:
         st.dataframe(
