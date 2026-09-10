@@ -237,18 +237,33 @@ def process_estado_actual():
     if df_mov_gen_filtrado.empty:
         return pd.DataFrame(), pd.DataFrame()
     
+    # 🔍 DEBUG 0: Ver columnas disponibles
+    print("=" * 60)
+    print("🔍 DEBUG 0: Columnas en df_mov_gen")
+    print(f"Columnas: {df_mov_gen.columns.tolist()}")
+    print("=" * 60)
+    
     # Obtener detalles de movimientos
     df_mov_det = pd.DataFrame(mov_detalles)
     mov_ids = df_mov_gen_filtrado['id'].tolist()
     df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
     
-    # Unir con generales
+    # 🔥 CORREGIDO: Solo traer columnas que existen
+    columnas_a_traer = ['id', 'equipo', 'fecha']
+    if 'tipo_perforacion' in df_mov_gen_filtrado.columns:
+        columnas_a_traer.append('tipo_perforacion')
+    
     df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen_filtrado[['id', 'equipo', 'fecha', 'tipo_perforacion']],
+        df_mov_gen_filtrado[columnas_a_traer],
         left_on='entrega_id',
         right_on='id',
         how='left'
     )
+    
+    # 🔥 Si tipo_perforacion no existe, crear con valor por defecto
+    if 'tipo_perforacion' not in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
+        print("⚠️ tipo_perforacion no existe, usando GENERAL")
     
     # Filtrar familias target
     df_mov_det_filtrado = df_mov_det_filtrado[
@@ -264,7 +279,7 @@ def process_estado_actual():
         axis=1
     )
     
-    # 🔍 DEBUG 1: Ver qué equipos y familias hay
+    # 🔍 DEBUG 1
     print("=" * 60)
     print("🔍 DEBUG 1: Movimientos filtrados")
     print(f"Total movimientos: {len(df_mov_det_filtrado)}")
@@ -273,7 +288,7 @@ def process_estado_actual():
     print(f"Tipos perforación únicos: {df_mov_det_filtrado['tipo_perforacion'].unique()}")
     print("=" * 60)
     
-    # Agrupar por equipo_brazo, familia, tipo_perforacion
+    # Agrupar
     entregas_recientes = df_mov_det_filtrado.groupby(
         ['equipo_brazo', 'familia', 'tipo_perforacion', 'equipo']
     ).agg({
@@ -282,13 +297,6 @@ def process_estado_actual():
     }).reset_index()
     
     entregas_recientes = entregas_recientes.rename(columns={'fecha': 'fecha_ultima_entrega'})
-    
-    # 🔍 DEBUG 2: Ver entregas recientes
-    print("=" * 60)
-    print("🔍 DEBUG 2: Entregas recientes (última por equipo/familia/tipo)")
-    print(f"Total: {len(entregas_recientes)}")
-    print(entregas_recientes.head(20).to_string())
-    print("=" * 60)
     
     # Cargar metros
     df_met_gen = pd.DataFrame(load_metros_general())
@@ -300,23 +308,18 @@ def process_estado_actual():
     met_ids = df_met_gen['id'].tolist()
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    # Unir metros con tipo_perforacion
-    df_met_det_filtrado = df_met_det_filtrado.merge(
-        df_met_gen[['id', 'tipo_perforacion']],
-        left_on='registro_id',
-        right_on='id',
-        how='left'
-    )
+    # 🔥 CORREGIDO: Verificar que tipo_perforacion existe en metros
+    if 'tipo_perforacion' in df_met_gen.columns:
+        df_met_det_filtrado = df_met_det_filtrado.merge(
+            df_met_gen[['id', 'tipo_perforacion']],
+            left_on='registro_id',
+            right_on='id',
+            how='left'
+        )
+    else:
+        df_met_det_filtrado['tipo_perforacion'] = 'GENERAL'
     
-    # 🔍 DEBUG 3: Ver metros disponibles
-    print("=" * 60)
-    print("🔍 DEBUG 3: Metros disponibles")
-    print(f"Total registros metros: {len(df_met_gen)}")
-    print(f"Equipos con metros: {df_met_gen['equipo'].unique()[:10]}")
-    print(f"Tipos perforación en metros: {df_met_gen['tipo_perforacion'].unique()}")
-    print("=" * 60)
-    
-    # Calcular metros por equipo
+    # Calcular metros
     resultados = []
     
     for _, row in entregas_recientes.iterrows():
@@ -327,10 +330,9 @@ def process_estado_actual():
         fecha_ultima = row['fecha_ultima_entrega']
         cantidad = row['cantidad']
         
-        # 🔍 DEBUG 4: Ver cada cálculo
         print(f"🔍 Procesando: {equipo_brazo} | {familia} | {tipo_perf} | Última: {fecha_ultima}")
         
-        # Filtrar metros
+        # 🔥 Filtrar metros
         met_ids_equipo = df_met_gen[
             (df_met_gen['equipo'] == equipo_base) &
             (df_met_gen['tipo_perforacion'] == tipo_perf) &
@@ -365,7 +367,7 @@ def process_estado_actual():
     
     df_resultado = pd.DataFrame(resultados)
     
-    # Agrupar por Equipo_Brazo y Familia (sumando múltiples tipos)
+    # Agrupar
     df_resultado_agrupado = df_resultado.groupby(['Equipo_Brazo', 'Familia']).agg({
         'Metros': 'sum'
     }).reset_index()
@@ -385,8 +387,6 @@ def process_estado_actual():
     tabla_pivot = tabla_pivot[columnas_orden]
     
     return tabla_pivot, df_resultado
-
-
 
 @st.cache_data(ttl=300)
 def process_tabla_mes(año, mes, compania):
