@@ -237,33 +237,31 @@ def process_estado_actual():
     if df_mov_gen_filtrado.empty:
         return pd.DataFrame(), pd.DataFrame()
     
-    # 🔍 DEBUG 0: Ver columnas disponibles
-    print("=" * 60)
-    print("🔍 DEBUG 0: Columnas en df_mov_gen")
-    print(f"Columnas: {df_mov_gen.columns.tolist()}")
-    print("=" * 60)
-    
     # Obtener detalles de movimientos
     df_mov_det = pd.DataFrame(mov_detalles)
     mov_ids = df_mov_gen_filtrado['id'].tolist()
     df_mov_det_filtrado = df_mov_det[df_mov_det['entrega_id'].isin(mov_ids)]
     
-    # 🔥 CORREGIDO: Solo traer columnas que existen
-    columnas_a_traer = ['id', 'equipo', 'fecha']
-    if 'tipo_perforacion' in df_mov_gen_filtrado.columns:
-        columnas_a_traer.append('tipo_perforacion')
+    # 🔥 CORREGIDO: Renombrar tipo_perforacion del general ANTES del merge
+    df_mov_gen_para_merge = df_mov_gen_filtrado[['id', 'equipo', 'fecha', 'tipo_perforacion']].copy()
+    df_mov_gen_para_merge = df_mov_gen_para_merge.rename(columns={
+        'tipo_perforacion': 'tipo_perf_general'  # 🔥 Renombrar para evitar conflicto
+    })
     
     df_mov_det_filtrado = df_mov_det_filtrado.merge(
-        df_mov_gen_filtrado[columnas_a_traer],
+        df_mov_gen_para_merge,
         left_on='entrega_id',
         right_on='id',
         how='left'
     )
     
-    # 🔥 Si tipo_perforacion no existe, crear con valor por defecto
-    if 'tipo_perforacion' not in df_mov_det_filtrado.columns:
+    # 🔥 Usar la columna renombrada como tipo_perforacion
+    if 'tipo_perf_general' in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = df_mov_det_filtrado['tipo_perf_general']
+    elif 'tipo_perforacion_y' in df_mov_det_filtrado.columns:
+        df_mov_det_filtrado['tipo_perforacion'] = df_mov_det_filtrado['tipo_perforacion_y']
+    else:
         df_mov_det_filtrado['tipo_perforacion'] = 'GENERAL'
-        print("⚠️ tipo_perforacion no existe, usando GENERAL")
     
     # Filtrar familias target
     df_mov_det_filtrado = df_mov_det_filtrado[
@@ -279,13 +277,10 @@ def process_estado_actual():
         axis=1
     )
     
-    # 🔍 DEBUG 1
+    # 🔍 DEBUG: Verificar tipos_perforacion
     print("=" * 60)
-    print("🔍 DEBUG 1: Movimientos filtrados")
-    print(f"Total movimientos: {len(df_mov_det_filtrado)}")
-    print(f"Equipos únicos: {df_mov_det_filtrado['equipo'].unique()[:10]}")
-    print(f"Familias únicas: {df_mov_det_filtrado['familia'].unique()}")
-    print(f"Tipos perforación únicos: {df_mov_det_filtrado['tipo_perforacion'].unique()}")
+    print("🔍 DEBUG: Tipos de perforación encontrados")
+    print(f"Tipos únicos: {df_mov_det_filtrado['tipo_perforacion'].unique()}")
     print("=" * 60)
     
     # Agrupar
@@ -304,20 +299,13 @@ def process_estado_actual():
     if df_met_gen.empty:
         return pd.DataFrame(), pd.DataFrame()
     
+    # 🔥 Renombrar tipo_perforacion de metros también para evitar conflicto
     df_met_det = pd.DataFrame(met_detalles)
     met_ids = df_met_gen['id'].tolist()
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    # 🔥 CORREGIDO: Verificar que tipo_perforacion existe en metros
-    if 'tipo_perforacion' in df_met_gen.columns:
-        df_met_det_filtrado = df_met_det_filtrado.merge(
-            df_met_gen[['id', 'tipo_perforacion']],
-            left_on='registro_id',
-            right_on='id',
-            how='left'
-        )
-    else:
-        df_met_det_filtrado['tipo_perforacion'] = 'GENERAL'
+    # 🔥 Crear diccionario de tipo_perforacion por ID de metros
+    tipo_por_met_id = dict(zip(df_met_gen['id'], df_met_gen['tipo_perforacion']))
     
     # Calcular metros
     resultados = []
@@ -330,16 +318,14 @@ def process_estado_actual():
         fecha_ultima = row['fecha_ultima_entrega']
         cantidad = row['cantidad']
         
-        print(f"🔍 Procesando: {equipo_brazo} | {familia} | {tipo_perf} | Última: {fecha_ultima}")
-        
-        # 🔥 Filtrar metros
+        # 🔥 Filtrar metros por equipo, tipo y fecha
         met_ids_equipo = df_met_gen[
             (df_met_gen['equipo'] == equipo_base) &
             (df_met_gen['tipo_perforacion'] == tipo_perf) &
             (pd.to_datetime(df_met_gen['fecha']) >= pd.to_datetime(fecha_ultima))
         ]['id'].tolist()
         
-        print(f"   📍 IDs de metros encontrados: {len(met_ids_equipo)}")
+        print(f"🔍 {equipo_brazo} | {familia} | {tipo_perf} | Última: {fecha_ultima} | IDs: {len(met_ids_equipo)}")
         
         df_met_equipo = df_met_det_filtrado[
             df_met_det_filtrado['registro_id'].isin(met_ids_equipo)
@@ -350,7 +336,7 @@ def process_estado_actual():
         else:
             metros = df_met_equipo['total_mp'].sum()
         
-        print(f"   📊 Metros calculados: {metros:.2f}")
+        print(f"   📊 Metros: {metros:.2f}")
         
         resultados.append({
             'Equipo_Brazo': equipo_brazo,
