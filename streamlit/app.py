@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 
 # ============================================
 # CONFIGURACIÓN DE PÁGINA
@@ -8,11 +9,24 @@ st.set_page_config(
     page_title="Sistema de Operaciones",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="collapsed"  # 🔥 Barra lateral colapsada
+    initial_sidebar_state="collapsed"
 )
 
 # ============================================
-# ESTILOS CSS - OCULTAR SIDEBAR Y NAVEGACIÓN SUPERIOR
+# RUTA BASE DEL PROYECTO
+# ============================================
+
+# 🔥 Obtener la ruta del directorio donde está app.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PAGES_DIR = os.path.join(BASE_DIR, "pages")
+
+# 🔍 Debug: Mostrar rutas
+print(f"BASE_DIR: {BASE_DIR}")
+print(f"PAGES_DIR: {PAGES_DIR}")
+print(f"Archivos en pages: {os.listdir(PAGES_DIR) if os.path.exists(PAGES_DIR) else 'No existe'}")
+
+# ============================================
+# ESTILOS CSS - OCULTAR SIDEBAR
 # ============================================
 
 st.markdown("""
@@ -20,13 +34,14 @@ st.markdown("""
         /* 🔥 OCULTAR LA BARRA LATERAL COMPLETAMENTE */
         [data-testid="stSidebar"] {
             display: none !important;
+            width: 0 !important;
+            min-width: 0 !important;
         }
         
         [data-testid="collapsedControl"] {
             display: none !important;
         }
         
-        /* 🔥 Ocultar botón de hamburguesa */
         button[kind="header"] {
             display: none !important;
         }
@@ -43,42 +58,6 @@ st.markdown("""
             padding-left: 2rem !important;
             padding-right: 2rem !important;
             max-width: 100% !important;
-        }
-        
-        /* 🔥 Estilo para la navegación superior */
-        .nav-container {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            padding: 15px 0;
-            border-bottom: 2px solid #2c3e50;
-            margin-bottom: 20px;
-            background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
-            border-radius: 10px;
-        }
-        
-        .nav-item {
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #2c3e50;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.2s ease;
-            border: 2px solid transparent;
-        }
-        
-        .nav-item:hover {
-            background-color: #e8f4f8;
-            border-color: #4472C4;
-            color: #4472C4;
-        }
-        
-        .nav-item.active {
-            background: linear-gradient(135deg, #4472C4 0%, #2a5a9a 100%);
-            color: #ffffff;
-            border-color: #2a5a9a;
-            box-shadow: 0 2px 8px rgba(68, 114, 196, 0.4);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -98,7 +77,6 @@ st.markdown("""
 # NAVEGACIÓN SUPERIOR
 # ============================================
 
-# Usar st.radio horizontal como navegación
 pagina = st.radio(
     "Navegación",
     [
@@ -109,11 +87,46 @@ pagina = st.radio(
         "📈 Reporte Gerencial"
     ],
     horizontal=True,
-    label_visibility="collapsed",  # 🔥 Ocultar el label "Navegación"
+    label_visibility="collapsed",
     key="navegacion_superior"
 )
 
 st.markdown("---")
+
+# ============================================
+# FUNCIÓN PARA CARGAR PÁGINAS
+# ============================================
+
+def cargar_pagina(nombre_archivo):
+    """Carga una página desde la carpeta pages"""
+    ruta = os.path.join(PAGES_DIR, nombre_archivo)
+    
+    print(f"🔍 Intentando cargar: {ruta}")
+    print(f"   ¿Existe?: {os.path.exists(ruta)}")
+    
+    if not os.path.exists(ruta):
+        st.error(f"❌ No se encontró el archivo: {nombre_archivo}")
+        st.write(f"**Ruta buscada:** `{ruta}`")
+        st.write(f"**Archivos disponibles:**")
+        if os.path.exists(PAGES_DIR):
+            for f in os.listdir(PAGES_DIR):
+                st.write(f"- {f}")
+        return
+    
+    try:
+        with open(ruta, "r", encoding="utf-8") as f:
+            codigo = f.read()
+        
+        # 🔥 Eliminar st.set_page_config si existe
+        import re
+        codigo = re.sub(r'st\.set_page_config\([^)]*\)', '', codigo)
+        
+        exec(codigo, {'__name__': '__main__'})
+        
+    except Exception as e:
+        st.error(f"❌ Error al cargar {nombre_archivo}: {e}")
+        import traceback
+        st.code(traceback.format_exc())
 
 # ============================================
 # CONTENIDO SEGÚN PÁGINA SELECCIONADA
@@ -132,14 +145,13 @@ if pagina == "📊 Dashboard":
     """)
 
 elif pagina == "🏆 Rendimiento":
-    # Importar y ejecutar la página de Rendimiento
-    exec(open("pages/2_🏆_Rendimiento.py", encoding="utf-8").read())
+    cargar_pagina("2_🏆_Rendimiento.py")
 
 elif pagina == "🚜 Equipos":
-    exec(open("pages/3_🚜_Equipos.py", encoding="utf-8").read())
+    cargar_pagina("3_🚜_Equipos.py")
 
 elif pagina == "📅 Avance Semanal":
-    exec(open("pages/4_📅_Avance_Semanal.py", encoding="utf-8").read())
+    cargar_pagina("4_📅_Avance_Semanal.py")
 
 elif pagina == "📈 Reporte Gerencial":
-    exec(open("pages/5_📈_Reporte_Gerencial.py", encoding="utf-8").read())
+    cargar_pagina("5_📈_Reporte_Gerencial.py")
