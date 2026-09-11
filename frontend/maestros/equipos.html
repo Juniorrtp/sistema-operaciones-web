@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Equipos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container">
+            <a href="../index.html" class="navbar-brand">
+                <span class="icon">🚜</span>
+                Equipos
+            </a>
+            <div class="navbar-actions">
+                <a href="../index.html" class="btn btn-outline-light">🏠 Inicio</a>
+                <button class="btn btn-primary" onclick="abrirModalNuevo()">➕ Nuevo Equipo</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding: 20px 0;">
+        <div class="filtros-container">
+            <div class="filtros-grid" style="grid-template-columns: 1fr auto;">
+                <div class="form-group">
+                    <label>Buscar</label>
+                    <input type="text" id="filtroBusqueda" class="form-control" placeholder="Equipo, compañía, tipo..." oninput="filtrarTabla()">
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button class="btn btn-secondary" onclick="cargarEquipos()">🔄 Recargar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container" style="margin-top: 24px;">
+            <div class="table-header">
+                <h4>📋 Lista de Equipos</h4>
+                <span id="contadorRegistros" style="font-size:14px; color:#6b7a8a;">0 registros</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table" id="tablaEquipos">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Equipo</th>
+                            <th>Compañía</th>
+                            <th>Tipo Perforación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyEquipos">
+                        <tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalEquipo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:14px; max-width:500px; width:90%; padding:28px 32px;">
+            <h5 id="modalTitulo" style="margin-bottom:20px;">Nuevo Equipo</h5>
+            
+            <form id="formEquipo" onsubmit="event.preventDefault(); guardarEquipo();">
+                <input type="hidden" id="equipoId">
+                
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Equipo *</label>
+                    <input type="text" id="equipoNombre" class="form-control" required placeholder="Nombre del equipo">
+                </div>
+                
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Compañía</label>
+                    <input type="text" id="equipoCompania" class="form-control" placeholder="Compañía">
+                </div>
+                
+                <div class="form-group" style="margin-bottom:20px;">
+                    <label>Tipo Perforación</label>
+                    <input type="text" id="equipoTipo" class="form-control" placeholder="Ej: DIAMANTINA, ROTATIVA, etc.">
+                </div>
+                
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">💾 Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        let equiposData = [];
+
+        document.addEventListener('DOMContentLoaded', cargarEquipos);
+
+        async function cargarEquipos() {
+            try {
+                const response = await fetch(`${API_URL}/equipos`, { credentials: 'include' });
+                equiposData = await response.json();
+                renderizarTabla(equiposData);
+            } catch (error) {
+                mostrarNotificacion('❌ Error al cargar equipos', 'danger');
+            }
+        }
+
+        function renderizarTabla(data) {
+            const tbody = document.getElementById('tbodyEquipos');
+            document.getElementById('contadorRegistros').textContent = `${data.length} registros`;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay equipos</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(eq => `
+                <tr>
+                    <td>${eq.id || ''}</td>
+                    <td>${eq.equipo || ''}</td>
+                    <td>${eq.compania || ''}</td>
+                    <td>${eq.tipo_perforacion || ''}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalEditar(${eq.id})">✏️</button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarEquipo(${eq.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filtrarTabla() {
+            const busqueda = document.getElementById('filtroBusqueda').value.toLowerCase();
+            const filtrados = equiposData.filter(eq => 
+                (eq.equipo || '').toLowerCase().includes(busqueda) ||
+                (eq.compania || '').toLowerCase().includes(busqueda) ||
+                (eq.tipo_perforacion || '').toLowerCase().includes(busqueda)
+            );
+            renderizarTabla(filtrados);
+        }
+
+        function abrirModalNuevo() {
+            document.getElementById('modalTitulo').textContent = 'Nuevo Equipo';
+            document.getElementById('equipoId').value = '';
+            document.getElementById('equipoNombre').value = '';
+            document.getElementById('equipoCompania').value = '';
+            document.getElementById('equipoTipo').value = '';
+            document.getElementById('modalEquipo').style.display = 'flex';
+        }
+
+        function abrirModalEditar(id) {
+            const eq = equiposData.find(e => e.id === id);
+            if (!eq) return;
+            
+            document.getElementById('modalTitulo').textContent = 'Editar Equipo';
+            document.getElementById('equipoId').value = eq.id;
+            document.getElementById('equipoNombre').value = eq.equipo || '';
+            document.getElementById('equipoCompania').value = eq.compania || '';
+            document.getElementById('equipoTipo').value = eq.tipo_perforacion || '';
+            document.getElementById('modalEquipo').style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalEquipo').style.display = 'none';
+        }
+
+        async function guardarEquipo() {
+            const id = document.getElementById('equipoId').value;
+            const data = {
+                equipo: document.getElementById('equipoNombre').value.trim(),
+                compania: document.getElementById('equipoCompania').value.trim(),
+                tipo_perforacion: document.getElementById('equipoTipo').value.trim()
+            };
+
+            try {
+                const url = id ? `${API_URL}/equipos/${id}` : `${API_URL}/equipos`;
+                const method = id ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                
+                if (result.success !== false) {
+                    mostrarNotificacion('✅ Equipo guardado', 'success');
+                    cerrarModal();
+                    cargarEquipos();
+                }
+            } catch (error) {
+                mostrarNotificacion('❌ Error al guardar', 'danger');
+            }
+        }
+
+        async function eliminarEquipo(id) {
+            if (!confirm('¿Eliminar este equipo?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/equipos/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                mostrarNotificacion('✅ Equipo eliminado', 'success');
+                cargarEquipos();
+            } catch (error) {
+                mostrarNotificacion('❌ Error al eliminar', 'danger');
+            }
+        }
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `${mensaje} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.prepend(alert);
+            setTimeout(() => alert.remove(), 3000);
+        }
+    </script>
+
+</body>
+</html>

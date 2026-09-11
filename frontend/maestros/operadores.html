@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Operadores</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="../index.html" class="navbar-brand">
+                <span class="icon">👷</span>
+                Operadores
+            </a>
+            <div class="navbar-actions">
+                <a href="../index.html" class="btn btn-outline-light">🏠 Inicio</a>
+                <button class="btn btn-primary" onclick="abrirModalNuevo()">➕ Nuevo Operador</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- CONTENIDO -->
+    <div class="container" style="padding: 20px 0;">
+
+        <!-- FILTROS -->
+        <div class="filtros-container">
+            <div class="filtros-grid" style="grid-template-columns: 1fr auto;">
+                <div class="form-group">
+                    <label>Buscar</label>
+                    <input type="text" id="filtroBusqueda" class="form-control" placeholder="Nombre, guardia..." oninput="filtrarTabla()">
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button class="btn btn-secondary" onclick="cargarOperadores()">🔄 Recargar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLA -->
+        <div class="table-container" style="margin-top: 24px;">
+            <div class="table-header">
+                <h4>📋 Lista de Operadores</h4>
+                <span id="contadorRegistros" style="font-size:14px; color:#6b7a8a;">0 registros</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table" id="tablaOperadores">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Guardia</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyOperadores">
+                        <tr><td colspan="4" class="text-center text-muted">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div id="modalOperador" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:14px; max-width:500px; width:90%; padding:28px 32px;">
+            <h5 id="modalTitulo" style="margin-bottom:20px;">Nuevo Operador</h5>
+            
+            <form id="formOperador" onsubmit="event.preventDefault(); guardarOperador();">
+                <input type="hidden" id="operadorId">
+                
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Nombre *</label>
+                    <input type="text" id="operadorNombre" class="form-control" required placeholder="Nombre completo">
+                </div>
+                
+                <div class="form-group" style="margin-bottom:20px;">
+                    <label>Guardia</label>
+                    <select id="operadorGuardia" class="form-select">
+                        <option value="">Seleccionar</option>
+                        <option value="DIA">DIA</option>
+                        <option value="NOCHE">NOCHE</option>
+                    </select>
+                </div>
+                
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">💾 Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="../js/api.js"></script>
+    <script>
+        let operadoresData = [];
+
+        document.addEventListener('DOMContentLoaded', cargarOperadores);
+
+        async function cargarOperadores() {
+            try {
+                const response = await fetch(`${API_URL}/operadores`, { credentials: 'include' });
+                operadoresData = await response.json();
+                renderizarTabla(operadoresData);
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarNotificacion('❌ Error al cargar operadores', 'danger');
+            }
+        }
+
+        function renderizarTabla(data) {
+            const tbody = document.getElementById('tbodyOperadores');
+            document.getElementById('contadorRegistros').textContent = `${data.length} registros`;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay operadores</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(op => `
+                <tr>
+                    <td>${op.id}</td>
+                    <td>${op.nombre || ''}</td>
+                    <td>${op.guardia || ''}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalEditar(${op.id})">✏️</button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarOperador(${op.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filtrarTabla() {
+            const busqueda = document.getElementById('filtroBusqueda').value.toLowerCase();
+            const filtrados = operadoresData.filter(op => 
+                (op.nombre || '').toLowerCase().includes(busqueda) ||
+                (op.guardia || '').toLowerCase().includes(busqueda)
+            );
+            renderizarTabla(filtrados);
+        }
+
+        function abrirModalNuevo() {
+            document.getElementById('modalTitulo').textContent = 'Nuevo Operador';
+            document.getElementById('operadorId').value = '';
+            document.getElementById('operadorNombre').value = '';
+            document.getElementById('operadorGuardia').value = '';
+            document.getElementById('modalOperador').style.display = 'flex';
+        }
+
+        function abrirModalEditar(id) {
+            const op = operadoresData.find(o => o.id === id);
+            if (!op) return;
+            
+            document.getElementById('modalTitulo').textContent = 'Editar Operador';
+            document.getElementById('operadorId').value = op.id;
+            document.getElementById('operadorNombre').value = op.nombre || '';
+            document.getElementById('operadorGuardia').value = op.guardia || '';
+            document.getElementById('modalOperador').style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalOperador').style.display = 'none';
+        }
+
+        async function guardarOperador() {
+            const id = document.getElementById('operadorId').value;
+            const data = {
+                nombre: document.getElementById('operadorNombre').value.trim(),
+                guardia: document.getElementById('operadorGuardia').value
+            };
+
+            try {
+                const url = id ? `${API_URL}/operadores/${id}` : `${API_URL}/operadores`;
+                const method = id ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                
+                if (result.success !== false) {
+                    mostrarNotificacion('✅ Operador guardado', 'success');
+                    cerrarModal();
+                    cargarOperadores();
+                } else {
+                    mostrarNotificacion('❌ Error: ' + (result.error || 'Desconocido'), 'danger');
+                }
+            } catch (error) {
+                mostrarNotificacion('❌ Error al guardar', 'danger');
+            }
+        }
+
+        async function eliminarOperador(id) {
+            if (!confirm('¿Eliminar este operador?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/operadores/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                if (result.success !== false) {
+                    mostrarNotificacion('✅ Operador eliminado', 'success');
+                    cargarOperadores();
+                }
+            } catch (error) {
+                mostrarNotificacion('❌ Error al eliminar', 'danger');
+            }
+        }
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `${mensaje} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.prepend(alert);
+            setTimeout(() => alert.remove(), 3000);
+        }
+    </script>
+
+</body>
+</html>

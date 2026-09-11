@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Aceros</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container">
+            <a href="../index.html" class="navbar-brand">
+                <span class="icon">🔩</span>
+                Aceros
+            </a>
+            <div class="navbar-actions">
+                <a href="../index.html" class="btn btn-outline-light">🏠 Inicio</a>
+                <button class="btn btn-primary" onclick="abrirModalNuevo()">➕ Nuevo Acero</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding: 20px 0;">
+        <div class="filtros-container">
+            <div class="filtros-grid" style="grid-template-columns: 1fr auto;">
+                <div class="form-group">
+                    <label>Buscar</label>
+                    <input type="text" id="filtroBusqueda" class="form-control" placeholder="Código, descripción, familia..." oninput="filtrarTabla()">
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button class="btn btn-secondary" onclick="cargarAceros()">🔄 Recargar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container" style="margin-top: 24px;">
+            <div class="table-header">
+                <h4>📋 Lista de Aceros</h4>
+                <span id="contadorRegistros" style="font-size:14px; color:#6b7a8a;">0 registros</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table" id="tablaAceros">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Familia</th>
+                            <th>Tipo Perforación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyAceros">
+                        <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalAcero" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:14px; max-width:500px; width:90%; padding:28px 32px;">
+            <h5 id="modalTitulo" style="margin-bottom:20px;">Nuevo Acero</h5>
+            
+            <form id="formAcero" onsubmit="event.preventDefault(); guardarAcero();">
+                <input type="hidden" id="aceroId">
+                
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Código *</label>
+                    <input type="text" id="aceroCodigo" class="form-control" required placeholder="Código del acero">
+                </div>
+                
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Descripción</label>
+                    <input type="text" id="aceroDescripcion" class="form-control" placeholder="Descripción">
+                </div>
+                
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label>Familia</label>
+                    <input type="text" id="aceroFamilia" class="form-control" placeholder="Familia">
+                </div>
+                
+                <div class="form-group" style="margin-bottom:20px;">
+                    <label>Tipo Perforación</label>
+                    <input type="text" id="aceroTipo" class="form-control" placeholder="Ej: DIAMANTINA, ROTATIVA, etc.">
+                </div>
+                
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">💾 Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        let acerosData = [];
+
+        document.addEventListener('DOMContentLoaded', cargarAceros);
+
+        async function cargarAceros() {
+            try {
+                const response = await fetch(`${API_URL}/aceros`, { credentials: 'include' });
+                acerosData = await response.json();
+                renderizarTabla(acerosData);
+            } catch (error) {
+                mostrarNotificacion('❌ Error al cargar aceros', 'danger');
+            }
+        }
+
+        function renderizarTabla(data) {
+            const tbody = document.getElementById('tbodyAceros');
+            document.getElementById('contadorRegistros').textContent = `${data.length} registros`;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay aceros</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(a => `
+                <tr>
+                    <td>${a.id || ''}</td>
+                    <td>${a.codigo || ''}</td>
+                    <td>${a.descripcion || ''}</td>
+                    <td>${a.familia || ''}</td>
+                    <td>${a.tipo_perforacion || ''}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalEditar(${a.id})">✏️</button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarAcero(${a.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filtrarTabla() {
+            const busqueda = document.getElementById('filtroBusqueda').value.toLowerCase();
+            const filtrados = acerosData.filter(a => 
+                (a.codigo || '').toLowerCase().includes(busqueda) ||
+                (a.descripcion || '').toLowerCase().includes(busqueda) ||
+                (a.familia || '').toLowerCase().includes(busqueda)
+            );
+            renderizarTabla(filtrados);
+        }
+
+        function abrirModalNuevo() {
+            document.getElementById('modalTitulo').textContent = 'Nuevo Acero';
+            document.getElementById('aceroId').value = '';
+            document.getElementById('aceroCodigo').value = '';
+            document.getElementById('aceroDescripcion').value = '';
+            document.getElementById('aceroFamilia').value = '';
+            document.getElementById('aceroTipo').value = '';
+            document.getElementById('modalAcero').style.display = 'flex';
+        }
+
+        function abrirModalEditar(id) {
+            const a = acerosData.find(x => x.id === id);
+            if (!a) return;
+            
+            document.getElementById('modalTitulo').textContent = 'Editar Acero';
+            document.getElementById('aceroId').value = a.id;
+            document.getElementById('aceroCodigo').value = a.codigo || '';
+            document.getElementById('aceroDescripcion').value = a.descripcion || '';
+            document.getElementById('aceroFamilia').value = a.familia || '';
+            document.getElementById('aceroTipo').value = a.tipo_perforacion || '';
+            document.getElementById('modalAcero').style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalAcero').style.display = 'none';
+        }
+
+        async function guardarAcero() {
+            const id = document.getElementById('aceroId').value;
+            const data = {
+                codigo: document.getElementById('aceroCodigo').value.trim(),
+                descripcion: document.getElementById('aceroDescripcion').value.trim(),
+                familia: document.getElementById('aceroFamilia').value.trim(),
+                tipo_perforacion: document.getElementById('aceroTipo').value.trim()
+            };
+
+            try {
+                const url = id ? `${API_URL}/aceros/${id}` : `${API_URL}/aceros`;
+                const method = id ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                
+                if (result.success !== false) {
+                    mostrarNotificacion('✅ Acero guardado', 'success');
+                    cerrarModal();
+                    cargarAceros();
+                }
+            } catch (error) {
+                mostrarNotificacion('❌ Error al guardar', 'danger');
+            }
+        }
+
+        async function eliminarAcero(id) {
+            if (!confirm('¿Eliminar este acero?')) return;
+            
+            try {
+                await fetch(`${API_URL}/aceros/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                mostrarNotificacion('✅ Acero eliminado', 'success');
+                cargarAceros();
+            } catch (error) {
+                mostrarNotificacion('❌ Error al eliminar', 'danger');
+            }
+        }
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `${mensaje} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.prepend(alert);
+            setTimeout(() => alert.remove(), 3000);
+        }
+    </script>
+
+</body>
+</html>
