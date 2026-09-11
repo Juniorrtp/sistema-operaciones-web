@@ -888,6 +888,45 @@ async def buscar_aceros(q: str = "", movimiento: str = "INGRESO"):
         return []
 
 
+
+@app.post("/api/aceros")
+async def crear_acero(data: dict, request: Request):
+    """Crea un nuevo acero"""
+    user = verify_request(request)
+    try:
+        db = get_db()
+        result = db.client.table("aceros").insert(data).execute()
+        return {"success": True, "id": result.data[0]['id'] if result.data else None}
+    except Exception as e:
+        print(f"❌ Error en crear_acero: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.put("/api/aceros/{id}")
+async def actualizar_acero(id: int, data: dict, request: Request):
+    """Actualiza un acero"""
+    user = verify_request(request)
+    try:
+        db = get_db()
+        db.client.table("aceros").update(data).eq("id", id).execute()
+        return {"success": True}
+    except Exception as e:
+        print(f"❌ Error en actualizar_acero: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/api/aceros/{id}")
+async def eliminar_acero(id: int, request: Request):
+    """Elimina un acero"""
+    user = verify_request(request)
+    try:
+        db = get_db()
+        db.client.table("aceros").delete().eq("id", id).execute()
+        return {"success": True}
+    except Exception as e:
+        print(f"❌ Error en eliminar_acero: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/stock/debug")
 async def debug_stock():
     """Muestra el cache actual y el stock real desde Supabase"""
@@ -1183,7 +1222,17 @@ async def eliminar_operador(id: int):
         print(f"Error en eliminar_operador: {e}")
         return {"success": False, "error": str(e)}
 
-
+@app.delete("/api/equipos/{id}")
+async def eliminar_equipo(id: int, request: Request):
+    """Elimina un equipo"""
+    user = verify_request(request)
+    try:
+        db = get_db()
+        db.client.table("equipo").delete().eq("id", id).execute()
+        return {"success": True}
+    except Exception as e:
+        print(f"❌ Error en eliminar_equipo: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.get("/api/equipos")
 async def listar_equipos():
