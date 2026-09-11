@@ -154,7 +154,6 @@ def load_metros_detalles():
 # ============================================
 # FUNCIÓN: HISTÓRICO CON EQUIPO-BRAZO
 # ============================================
-
 @st.cache_data(ttl=600)
 def process_historico_brazos(equipo_seleccionado, meses_atras=12, año_filtro=None):
     """Procesa el histórico de un equipo con todos sus brazos"""
@@ -278,7 +277,8 @@ def process_historico_brazos(equipo_seleccionado, meses_atras=12, año_filtro=No
                 })
             
             if historico:
-                key = f"{combinacion} - {familia}"
+                # 🔥 USAR TUPLA COMO CLAVE (evita conflictos con "-")
+                key = (combinacion, familia)
                 resultados[key] = pd.DataFrame(historico)
     
     logger.info(f"✅ Histórico generado para {len(resultados)} combinaciones")
@@ -782,7 +782,6 @@ with tab2:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Usar último mes como default si existe
         if ultimo_ano and ultimo_ano in años_disponibles:
             idx_ano = años_disponibles.index(ultimo_ano)
         else:
@@ -824,25 +823,23 @@ with tab2:
             )
         
         if not df_entregas.empty:
+            # ============================================
+            # TABLA 1: NÚMERO DE ENTREGAS
+            # ============================================
             st.markdown("### 📦 Número de Entregas")
             html_entregas = crear_tabla_html(df_entregas, titulo="")
             st.markdown(html_entregas, unsafe_allow_html=True)
             
+            # ============================================
+            # TABLA 2: RENDIMIENTO
+            # ============================================
             st.markdown("### 📊 Rendimiento (m/unidad)")
-            st.dataframe(
-                df_rendimiento,
-                column_config={
-                    "Equipo_Brazo": st.column_config.TextColumn("Equipo/Brazo"),
-                    "SHANK": st.column_config.NumberColumn("SHANK", format="%.2f"),
-                    "ACOPLES": st.column_config.NumberColumn("ACOPLES", format="%.2f"),
-                    "BARRAS": st.column_config.NumberColumn("BARRAS", format="%.2f"),
-                    "RIMADORAS": st.column_config.NumberColumn("RIMADORAS", format="%.2f")
-                },
-                hide_index=True,
-                use_container_width=True
-            )
+            html_rendimiento = crear_tabla_html(df_rendimiento, titulo="")
+            st.markdown(html_rendimiento, unsafe_allow_html=True)
             
-            # Gráfico
+            # ============================================
+            # GRÁFICO DE RENDIMIENTO
+            # ============================================
             df_rendimiento_melt = df_rendimiento.melt(
                 id_vars=['Equipo_Brazo'],
                 var_name='Familia',
@@ -912,7 +909,6 @@ with tab3:
             key="año_historico_tab3"
         )
     
-    # Botón para generar histórico
     if equipo_historico is not None:
         if st.button("🔍 Generar Histórico", key="btn_historico_tab3"):
             with st.spinner("Generando histórico..."):
@@ -923,34 +919,45 @@ with tab3:
                 )
             
             if historico_data:
-                claves_ordenadas = sorted(historico_data.keys())
+                # 🔥 ORDENAR POR TUPLA (equipo, familia)
+                claves_ordenadas = sorted(historico_data.keys(), key=lambda x: (x[0], x[1]))
                 
                 for clave in claves_ordenadas:
                     df_hist = historico_data[clave]
                     
                     if not df_hist.empty:
-                        partes = clave.split(" - ")
-                        combinacion = partes[0]
-                        familia = partes[1] if len(partes) > 1 else "General"
-
-                                            # 🔥 TÍTULO CON FAMILIA BIEN VISIBLE
-                        with st.expander(f"📌 {combinacion} — 🔧 Familia: {familia}", expanded=False):
+                        # 🔥 DESEMPAQUETAR TUPLA
+                        combinacion, familia = clave
+                        
+                        # 🔥 TÍTULO CON FAMILIA CLARA
+                        with st.expander(f"🚜 {combinacion} — 🔧 Familia: {familia}", expanded=False):
+                            
+                            # 🔥 INFO CLARA DENTRO DEL EXPANDER
+                            st.markdown(f"""
+                                <div style="background: linear-gradient(90deg, #2c3e50, #4472C4); 
+                                            padding: 12px 18px; border-radius: 8px; margin-bottom: 15px;">
+                                    <span style="color: white; font-size: 16px; font-weight: 600;">
+                                        🔧 FAMILIA: {familia}
+                                    </span>
+                                    <span style="color: #e8f4f8; font-size: 14px; margin-left: 15px;">
+                                        🚜 Equipo: <b>{combinacion}</b>
+                                    </span>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
                             # Formatear fechas
-                            df_hist['Fecha_Inicio'] = pd.to_datetime(df_hist['Fecha_Inicio']).dt.date
-                            df_hist['Fecha_Fin'] = pd.to_datetime(df_hist['Fecha_Fin']).dt.date
+                            df_hist_display = df_hist.copy()
+                            df_hist_display['Fecha_Inicio'] = pd.to_datetime(df_hist_display['Fecha_Inicio']).dt.date
+                            df_hist_display['Fecha_Fin'] = pd.to_datetime(df_hist_display['Fecha_Fin']).dt.date
                             
-                            # 🔥 Mostrar título de la familia dentro
-                            st.markdown(f"### 🔧 Familia: **{familia}**")
-                            st.caption(f"🚜 Equipo/Brazo: {combinacion}")
-                            
-                            # 🔥 TABLA HTML
-                            html_hist = crear_tabla_html(df_hist, titulo="")
+                            # 🔥 TABLA HTML CON ESTILO
+                            html_hist = crear_tabla_html(df_hist_display, titulo="")
                             st.markdown(html_hist, unsafe_allow_html=True)
-
                             
-                            if len(df_hist) > 1:
+                            # Gráfico de evolución
+                            if len(df_hist_display) > 1:
                                 fig = px.line(
-                                    df_hist,
+                                    df_hist_display,
                                     x='Fecha_Inicio',
                                     y='Metros',
                                     title=f"Evolución de Metros - {combinacion} - {familia}",
