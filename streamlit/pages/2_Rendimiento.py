@@ -17,8 +17,95 @@ from utils.api_client import (
     load_objetivos
 )
 apply_custom_styles()
-# Ocultar elementos de Streamlit
+# Ocultar elementos de Streamlit# ============================================
+# FUNCIÓN PARA CREAR TABLAS HTML
+# ============================================
 
+def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
+    """Crea una tabla HTML personalizada sin scroll"""
+    
+    if df.empty:
+        return '<p style="text-align:center; color:#6c757d; padding:20px;">ℹ️ No hay datos para mostrar</p>'
+    
+    columnas = df.columns.tolist()
+    
+    html = ""
+    
+    if titulo:
+        html += f'<p style="font-size:14px; font-weight:600; color:#2c3e50; margin:10px 0 5px 0;">{titulo}</p>'
+    
+    html += '<div style="display:flex; justify-content:center; width:100%; overflow:visible;">'
+    html += '<table style="border-collapse:collapse; border:2px solid #2c3e50; font-family:Segoe UI, Arial, sans-serif; font-size:12px; min-width:400px; max-width:100%; margin:0 auto;">'
+    
+    # Encabezados
+    html += '<thead>'
+    html += '<tr style="background:linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">'
+    for col in columnas:
+        if columnas_estrechas and col in columnas_estrechas:
+            html += f'<th style="color:#ffffff; font-weight:bold; font-size:11px; text-align:center; padding:5px 8px; border:1px solid #1a252f; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; min-width:60px;">{col}</th>'
+        else:
+            html += f'<th style="color:#ffffff; font-weight:bold; font-size:11px; text-align:center; padding:6px 10px; border:1px solid #1a252f; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap;">{col}</th>'
+    html += '</tr>'
+    html += '</thead>'
+    
+    # Cuerpo
+    html += '<tbody>'
+    for idx, row in df.iterrows():
+        bg_color = '#f8f9fa' if idx % 2 == 1 else '#ffffff'
+        html += f'<tr style="background-color:{bg_color};">'
+        
+        for col in columnas:
+            valor = row[col]
+            
+            # Estilo según columna
+            if col == 'Familia':
+                estilo = 'text-align:left; font-weight:600;'
+            elif col == 'Eficiencia':
+                # Colorear eficiencia
+                try:
+                    val_num = float(str(valor).replace('%', ''))
+                    if val_num >= 100:
+                        estilo = 'text-align:center; font-weight:bold; color:#28a745; background-color:#d4edda;'
+                    elif val_num >= 80:
+                        estilo = 'text-align:center; font-weight:bold; color:#856404; background-color:#fff3cd;'
+                    elif val_num >= 50:
+                        estilo = 'text-align:center; font-weight:bold; color:#856404; background-color:#ffe5b4;'
+                    else:
+                        estilo = 'text-align:center; font-weight:bold; color:#721c24; background-color:#f8d7da;'
+                except:
+                    estilo = 'text-align:center;'
+            elif col == 'Guardia':
+                estilo = 'text-align:center; font-weight:600;'
+            elif col == 'Operador':
+                estilo = 'text-align:left;'
+            elif isinstance(valor, (int, float)):
+                estilo = 'text-align:right;'
+            else:
+                estilo = 'text-align:left;'
+            
+            # Formatear valores
+            if isinstance(valor, (int, float)):
+                if col in ['Metros', 'Rendimiento', 'Objetivo']:
+                    valor_display = f'{valor:,.2f}'
+                elif col == 'Eficiencia':
+                    valor_display = f'{valor:.1f}%'
+                else:
+                    valor_display = f'{valor:,.0f}'
+            else:
+                valor_display = valor
+            
+            if columnas_estrechas and col in columnas_estrechas:
+                html += f'<td style="padding:4px 6px; border:1px solid #bdc3c7; color:#2c3e50; font-size:12px; {estilo}">{valor_display}</td>'
+            else:
+                html += f'<td style="padding:5px 10px; border:1px solid #bdc3c7; color:#2c3e50; font-size:12px; {estilo}">{valor_display}</td>'
+        
+        html += '</tr>'
+    html += '</tbody>'
+    
+    html += '</table>'
+    html += '</div>'
+    
+    return html
 
 
 # ============================================
@@ -53,7 +140,7 @@ def load_movimientos_detalles():
 
 @st.cache_data(ttl=300)
 def load_metros_general(fecha_desde=None, fecha_hasta=None):
-    params = {"limit": 5000}
+    params = {"limit": 5000} 
     if fecha_desde:
         params["fecha_desde"] = fecha_desde
     if fecha_hasta:
@@ -214,10 +301,6 @@ def process_rendimiento_aceros(año, mes, compania, tipos_perf):
     
     return pd.DataFrame(resultados)
 
-# ============================================
-# FUNCIÓN PRINCIPAL - RENDIMIENTO OPERADORES
-# ============================================
-
 
 
 @st.cache_data(ttl=300)
@@ -371,9 +454,7 @@ def process_rendimiento_operadores(año, mes, compania, tipos_perf):
     
     return pd.DataFrame(resultados)
 
-# ============================================
-# FILTROS EN LA PARTE SUPERIOR
-# ============================================
+
 
 st.title("🏆 Rendimiento - Aceros y Operadores")
 
@@ -476,20 +557,10 @@ if tipos_seleccionados:
                 st.markdown(f"### 📌 {tipo}")
                 
                 # Mostrar tabla
-                st.dataframe(
-                    df_tipo,
-                    column_config={
-                        "Familia": st.column_config.TextColumn("Familia"),
-                        "Cantidad": st.column_config.NumberColumn("Cantidad (SALIDAS)", format="%.0f"),
-                        "Metros": st.column_config.NumberColumn("Metros", format="%.2f"),
-                        "Rendimiento": st.column_config.NumberColumn("Rendimiento (m/unidad)", format="%.2f"),
-                        "Objetivo": st.column_config.NumberColumn("Objetivo", format="%.2f"),
-                        "Eficiencia": st.column_config.NumberColumn("Eficiencia (%)", format="%.1f%%")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-                
+                # 🔥 TABLA HTML CON ESTILO
+                html_tabla = crear_tabla_html(df_tipo, titulo="")
+                st.markdown(html_tabla, unsafe_allow_html=True)
+                                
                 # Gráfico de eficiencia para este tipo
                 fig = px.bar(
                     df_tipo,
@@ -554,20 +625,9 @@ if tipos_seleccionados:
                 st.markdown(f"### 📌 {tipo}")
                 
                 # Mostrar tabla
-                st.dataframe(
-                    df_tipo,
-                    column_config={
-                        "Guardia": st.column_config.TextColumn("Guardia"),
-                        "Operador": st.column_config.TextColumn("Operador"),
-                        "Cantidad": st.column_config.NumberColumn("Cantidad (BROCAS)", format="%.0f"),
-                        "Metros": st.column_config.NumberColumn("Metros", format="%.2f"),
-                        "Rendimiento": st.column_config.NumberColumn("Rendimiento (m/unidad)", format="%.2f"),
-                        "Objetivo": st.column_config.NumberColumn("Objetivo", format="%.2f"),
-                        "Eficiencia": st.column_config.NumberColumn("Eficiencia (%)", format="%.1f%%")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
+                # 🔥 TABLA HTML CON ESTILO
+                html_tabla = crear_tabla_html(df_tipo, titulo="")
+                st.markdown(html_tabla, unsafe_allow_html=True)
                 
                 # Gráfico de ranking para este tipo
                 fig = px.bar(
