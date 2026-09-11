@@ -17,6 +17,73 @@ from utils.api_client import (
     load_stock_from_api
 )
 
+# ============================================
+# FUNCIÓN PARA CREAR TABLAS HTML
+# ============================================
+
+def crear_tabla_html(df, titulo=None, columnas_estrechas=None):
+    """Crea una tabla HTML personalizada sin scroll"""
+    
+    if df.empty:
+        return '<p style="text-align:center; color:#6c757d; padding:20px;">ℹ️ No hay datos para mostrar</p>'
+    
+    columnas = df.columns.tolist()
+    
+    html = ""
+    
+    if titulo:
+        html += f'<p style="font-size:14px; font-weight:600; color:#2c3e50; margin:10px 0 5px 0;">{titulo}</p>'
+    
+    html += '<div style="display:flex; justify-content:center; width:100%; overflow:visible;">'
+    html += '<table style="border-collapse:collapse; border:2px solid #2c3e50; font-family:Segoe UI, Arial, sans-serif; font-size:12px; min-width:300px; max-width:100%; margin:0 auto;">'
+    
+    # Encabezados
+    html += '<thead>'
+    html += '<tr style="background:linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">'
+    for col in columnas:
+        html += f'<th style="color:#ffffff; font-weight:bold; font-size:11px; text-align:center; padding:6px 10px; border:1px solid #1a252f; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap;">{col}</th>'
+    html += '</tr>'
+    html += '</thead>'
+    
+    # Cuerpo
+    html += '<tbody>'
+    for idx, row in df.iterrows():
+        bg_color = '#f8f9fa' if idx % 2 == 1 else '#ffffff'
+        html += f'<tr style="background-color:{bg_color};">'
+        
+        for col in columnas:
+            valor = row[col]
+            
+            # Estilo según columna
+            if col == 'Equipo_Brazo':
+                estilo = 'text-align:left; font-weight:600; color:#1a5276; white-space:nowrap;'
+            elif col == 'Familia':
+                estilo = 'text-align:left; font-weight:600;'
+            elif col == 'Fecha_Inicio' or col == 'Fecha_Fin':
+                estilo = 'text-align:center;'
+            elif isinstance(valor, (int, float)):
+                estilo = 'text-align:right;'
+            else:
+                estilo = 'text-align:left;'
+            
+            # Formatear valores
+            if isinstance(valor, (int, float)):
+                if col in ['Metros', 'Rendimiento']:
+                    valor_display = f'{valor:,.2f}'
+                else:
+                    valor_display = f'{valor:,.0f}'
+            else:
+                valor_display = valor
+            
+            html += f'<td style="padding:5px 10px; border:1px solid #bdc3c7; color:#2c3e50; font-size:12px; {estilo}">{valor_display}</td>'
+        
+        html += '</tr>'
+    html += '</tbody>'
+    
+    html += '</table>'
+    html += '</div>'
+    
+    return html
 
 # Aplicar estilos personalizados
 apply_custom_styles()
@@ -691,10 +758,6 @@ with tab1:
     with st.spinner("Procesando datos..."):
         df_estado, df_detalle = process_estado_actual()
 
-    with st.expander("🔍 DEBUG - Ver datos crudos", expanded=False):
-        st.write("### 📊 Resumen de datos")
-        st.write(f"- df_estado filas: {len(df_estado) if not df_estado.empty else 0}")
-        st.write(f"- df_detalle filas: {len(df_detalle) if not df_detalle.empty else 0}")
         
         if not df_detalle.empty:
             st.write("### 📋 Detalle completo (df_detalle)")
@@ -711,24 +774,12 @@ with tab1:
             st.dataframe(df_estado, use_container_width=True)
 
 
-
-
-
     
     
     if not df_estado.empty:
-        st.dataframe(
-            df_estado,
-            column_config={
-                "Equipo_Brazo": st.column_config.TextColumn("Equipo/Brazo"),
-                "SHANK": st.column_config.NumberColumn("SHANK", format="%.2f"),
-                "ACOPLES": st.column_config.NumberColumn("ACOPLES", format="%.2f"),
-                "BARRAS": st.column_config.NumberColumn("BARRAS", format="%.2f"),
-                "RIMADORAS": st.column_config.NumberColumn("RIMADORAS", format="%.2f")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+        # 🔥 TABLA HTML SIN SCROLL
+        html_tabla = crear_tabla_html(df_estado, titulo="")
+        st.markdown(html_tabla, unsafe_allow_html=True)
         
         # Resumen por familia
         st.subheader("📊 Resumen por Familia")
@@ -796,18 +847,8 @@ with tab2:
         
         if not df_entregas.empty:
             st.markdown("### 📦 Número de Entregas")
-            st.dataframe(
-                df_entregas,
-                column_config={
-                    "Equipo_Brazo": st.column_config.TextColumn("Equipo/Brazo"),
-                    "SHANK": st.column_config.NumberColumn("SHANK", format="%.0f"),
-                    "ACOPLES": st.column_config.NumberColumn("ACOPLES", format="%.0f"),
-                    "BARRAS": st.column_config.NumberColumn("BARRAS", format="%.0f"),
-                    "RIMADORAS": st.column_config.NumberColumn("RIMADORAS", format="%.0f")
-                },
-                hide_index=True,
-                use_container_width=True
-            )
+            html_entregas = crear_tabla_html(df_entregas, titulo="")
+            st.markdown(html_entregas, unsafe_allow_html=True)
             
             st.markdown("### 📊 Rendimiento (m/unidad)")
             st.dataframe(
@@ -913,21 +954,21 @@ with tab3:
                         partes = clave.split(" - ")
                         combinacion = partes[0]
                         familia = partes[1] if len(partes) > 1 else "General"
-                        
-                        with st.expander(f"📌 {combinacion} - {familia}", expanded=False):
+
+                                            # 🔥 TÍTULO CON FAMILIA BIEN VISIBLE
+                        with st.expander(f"📌 {combinacion} — 🔧 Familia: {familia}", expanded=False):
+                            # Formatear fechas
                             df_hist['Fecha_Inicio'] = pd.to_datetime(df_hist['Fecha_Inicio']).dt.date
                             df_hist['Fecha_Fin'] = pd.to_datetime(df_hist['Fecha_Fin']).dt.date
                             
-                            st.dataframe(
-                                df_hist,
-                                column_config={
-                                    "Fecha_Inicio": st.column_config.DateColumn("Fecha Inicio"),
-                                    "Fecha_Fin": st.column_config.DateColumn("Fecha Fin"),
-                                    "Metros": st.column_config.NumberColumn("Metros", format="%.2f")
-                                },
-                                hide_index=True,
-                                use_container_width=True
-                            )
+                            # 🔥 Mostrar título de la familia dentro
+                            st.markdown(f"### 🔧 Familia: **{familia}**")
+                            st.caption(f"🚜 Equipo/Brazo: {combinacion}")
+                            
+                            # 🔥 TABLA HTML
+                            html_hist = crear_tabla_html(df_hist, titulo="")
+                            st.markdown(html_hist, unsafe_allow_html=True)
+
                             
                             if len(df_hist) > 1:
                                 fig = px.line(
