@@ -1,107 +1,145 @@
 import streamlit as st
-from utils.styles import apply_custom_styles
+
 # ============================================
 # CONFIGURACIÓN DE PÁGINA
 # ============================================
 
 st.set_page_config(
-    page_title="Sistema de Operaciones - Control de Aceros",
+    page_title="Sistema de Operaciones",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"  # 🔥 Barra lateral colapsada
 )
 
-apply_custom_styles()
 # ============================================
-# ESTILOS CSS PARA PERSONALIZAR EL SIDEBAR
+# ESTILOS CSS - OCULTAR SIDEBAR Y NAVEGACIÓN SUPERIOR
 # ============================================
-
-
-# ============================================
-# CONTENIDO DEL SIDEBAR (USANDO EL NATIVO)
-# ============================================
-
-with st.sidebar:
-    # Título personalizado
-    st.markdown("""
-        <div class="sidebar-title">
-            🏗️ SISTEMA DE<br>OPERACIONES
-            <small>Control de Aceros</small>
-        </div>
-        <hr class="sidebar-divider">
-    """, unsafe_allow_html=True)
-    
-    # El menú de radio se crea automáticamente con las páginas
-    # Solo agregamos contenido adicional después
-    
-    # Separador
-    st.markdown("---")
-    
-    # Estado de conexión
-    try:
-        import requests
-        api_url = st.secrets.get("API_URL", "https://sistema-operaciones-web.onrender.com")
-        response = requests.get(f"{api_url}/api/movimientos?limit=1", timeout=5)
-        if response.status_code == 200:
-            st.markdown("""
-                <div class="connection-status online">
-                    🟢 API Conectada
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-                <div class="connection-status offline">
-                    🟡 API no disponible
-                </div>
-            """, unsafe_allow_html=True)
-    except:
-        st.markdown("""
-            <div class="connection-status offline">
-                🔴 Error de conexión
-            </div>
-        """, unsafe_allow_html=True)
-    
-    # Versión
-    st.markdown("""
-        <div class="sidebar-version">
-            v1.0.0 · 2026
-        </div>
-    """, unsafe_allow_html=True)
-
-# ============================================
-# CONTENIDO PRINCIPAL
-# ============================================
-
-st.title("🏗️ Sistema de Operaciones")
-st.markdown("---")
 
 st.markdown("""
-### 📋 Bienvenido al Sistema de Control de Aceros y Perforación
+    <style>
+        /* 🔥 OCULTAR LA BARRA LATERAL COMPLETAMENTE */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+        
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        
+        /* 🔥 Ocultar botón de hamburguesa */
+        button[kind="header"] {
+            display: none !important;
+        }
+        
+        /* 🔥 Ocultar elementos por defecto */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .stDeployButton {display: none;}
+        
+        /* 🔥 Ajustar el ancho del contenido */
+        .main .block-container {
+            padding-top: 1rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            max-width: 100% !important;
+        }
+        
+        /* 🔥 Estilo para la navegación superior */
+        .nav-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 0;
+            border-bottom: 2px solid #2c3e50;
+            margin-bottom: 20px;
+            background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 10px;
+        }
+        
+        .nav-item {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+        
+        .nav-item:hover {
+            background-color: #e8f4f8;
+            border-color: #4472C4;
+            color: #4472C4;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(135deg, #4472C4 0%, #2a5a9a 100%);
+            color: #ffffff;
+            border-color: #2a5a9a;
+            box-shadow: 0 2px 8px rgba(68, 114, 196, 0.4);
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-Este sistema te permite gestionar y analizar:
+# ============================================
+# TÍTULO
+# ============================================
 
-- 📊 **Dashboard** - Resumen ejecutivo con KPIs principales
-- 🏆 **Rendimiento** - Análisis de aceros y operadores
-- 🚜 **Equipos** - Estado y consumo por equipo
-- 📅 **Avance Semanal** - Reporte gerencial de consumo y metros
-- 📈 **Reporte Gerencial** - Análisis detallado para la gerencia
+st.markdown("""
+    <div style="text-align: center; padding: 10px 0 20px 0;">
+        <h1 style="color: #2c3e50; margin: 0;">🏗️ Sistema de Operaciones</h1>
+        <p style="color: #6c757d; font-size: 14px; margin: 5px 0 0 0;">Control de Aceros y Perforación</p>
+    </div>
+""", unsafe_allow_html=True)
 
----
+# ============================================
+# NAVEGACIÓN SUPERIOR
+# ============================================
 
-### 🚀 ¿Cómo usar el sistema?
+# Usar st.radio horizontal como navegación
+pagina = st.radio(
+    "Navegación",
+    [
+        "📊 Dashboard",
+        "🏆 Rendimiento",
+        "🚜 Equipos",
+        "📅 Avance Semanal",
+        "📈 Reporte Gerencial"
+    ],
+    horizontal=True,
+    label_visibility="collapsed",  # 🔥 Ocultar el label "Navegación"
+    key="navegacion_superior"
+)
 
-1. **Selecciona una página** en el menú lateral izquierdo
-2. **Aplica filtros** para ajustar los datos
-3. **Visualiza** las tablas y gráficos
-4. **Exporta** los reportes a Excel si lo necesitas
+st.markdown("---")
 
----
+# ============================================
+# CONTENIDO SEGÚN PÁGINA SELECCIONADA
+# ============================================
 
-### 📊 Estado del sistema
+if pagina == "📊 Dashboard":
+    st.info("👈 Selecciona una página en la barra superior para comenzar")
+    st.markdown("### 📊 Bienvenido al Sistema de Operaciones")
+    st.markdown("""
+    Este sistema te permite:
+    - 📊 Ver el **Dashboard** con KPIs principales
+    - 🏆 Analizar el **Rendimiento** de aceros y operadores
+    - 🚜 Revisar el estado de los **Equipos**
+    - 📅 Generar el **Avance Semanal**
+    - 📈 Crear el **Reporte Gerencial**
+    """)
 
-- ✅ Módulo de Rendimiento completo
-- ✅ Módulo de Equipos completo
-- ✅ Avance Semanal completo
-- 🚧 Dashboard en construcción
-- 🚧 Reporte Gerencial en construcción
-""")
+elif pagina == "🏆 Rendimiento":
+    # Importar y ejecutar la página de Rendimiento
+    exec(open("pages/2_🏆_Rendimiento.py", encoding="utf-8").read())
+
+elif pagina == "🚜 Equipos":
+    exec(open("pages/3_🚜_Equipos.py", encoding="utf-8").read())
+
+elif pagina == "📅 Avance Semanal":
+    exec(open("pages/4_📅_Avance_Semanal.py", encoding="utf-8").read())
+
+elif pagina == "📈 Reporte Gerencial":
+    exec(open("pages/5_📈_Reporte_Gerencial.py", encoding="utf-8").read())
