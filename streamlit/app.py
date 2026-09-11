@@ -145,13 +145,13 @@ if pagina == "📊 Dashboard":
     """)
 
 elif pagina == "🏆 Rendimiento":
-    cargar_pagina("2_🏆_Rendimiento.py")
+    cargar_pagina("2_Rendimiento.py")
 
 elif pagina == "🚜 Equipos":
-    cargar_pagina("3_🚜_Equipos.py")
+    cargar_pagina("3_Equipos.py")
 
 elif pagina == "📅 Avance Semanal":
-    cargar_pagina("4_📅_Avance_Semanal.py")
+    cargar_pagina("4_Avance_Semanal.py")
 
 elif pagina == "📈 Reporte Gerencial":
-    cargar_pagina("5_📈_Reporte_Gerencial.py")
+    cargar_pagina("5_Reporte_Gerencial.py")
