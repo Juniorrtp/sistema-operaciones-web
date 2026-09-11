@@ -750,38 +750,19 @@ st.title("🚜 Equipos - Rendimiento y Consumo")
 
 tab1, tab2, tab3 = st.tabs(["📊 Estado Actual", "📋 Tabla del Mes", "📈 Histórico"])
 
-
 with tab1:
     st.subheader("📊 Estado Actual - Metros por Equipo y Familia")
     st.caption("📌 Muestra los metros perforados desde la última entrega hasta hoy")
     
     with st.spinner("Procesando datos..."):
         df_estado, df_detalle = process_estado_actual()
-
-        
-        if not df_detalle.empty:
-            st.write("### 📋 Detalle completo (df_detalle)")
-            st.dataframe(df_detalle, use_container_width=True)
-            
-            st.write("### 📅 Fechas de última entrega por equipo")
-            for equipo in df_detalle['Equipo_Brazo'].unique()[:10]:  # Primeros 10
-                df_eq = df_detalle[df_detalle['Equipo_Brazo'] == equipo]
-                st.write(f"**{equipo}:**")
-                st.dataframe(df_eq[['Familia', 'Cantidad', 'Metros', 'Fecha_Ultima_Entrega']], hide_index=True)
-        
-        if not df_estado.empty:
-            st.write("### 📊 Tabla pivoteada (df_estado)")
-            st.dataframe(df_estado, use_container_width=True)
-
-
-    
     
     if not df_estado.empty:
-        # 🔥 TABLA HTML SIN SCROLL
+        # 🔥 TABLA PRINCIPAL HTML (sin scroll)
         html_tabla = crear_tabla_html(df_estado, titulo="")
         st.markdown(html_tabla, unsafe_allow_html=True)
         
-        # Resumen por familia
+        # 🔥 RESUMEN POR FAMILIA
         st.subheader("📊 Resumen por Familia")
         col1, col2, col3, col4 = st.columns(4)
         
@@ -789,13 +770,10 @@ with tab1:
             total = df_estado[familia].sum() if familia in df_estado.columns else 0
             with [col1, col2, col3, col4][idx]:
                 st.metric(f"Total {familia}", f"{total:,.2f} m")
-        
-        # Mostrar fecha de última actualización
-        if not df_detalle.empty:
-            ultima_fecha = df_detalle['Fecha_Ultima_Entrega'].max()
-            st.caption(f"🕐 Última actualización basada en entregas hasta: {ultima_fecha}")
     else:
         st.warning("No hay datos disponibles")
+
+
 
 with tab2:
     st.subheader("📋 Tabla del Mes - Entregas y Rendimiento")
