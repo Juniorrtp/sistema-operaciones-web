@@ -471,10 +471,7 @@ def process_tabla_mes(año, mes, compania):
         ]
     
     if df_mov_gen_filtrado.empty:
-        logger.warning("⚠️ No hay movimientos SALIDA para los filtros")
         return pd.DataFrame(), pd.DataFrame()
-    
-    logger.info(f"📊 Movimientos SALIDA: {len(df_mov_gen_filtrado)}")
     
     # Obtener detalles de movimientos
     df_mov_det = pd.DataFrame(mov_detalles)
@@ -494,7 +491,6 @@ def process_tabla_mes(año, mes, compania):
     ]
     
     if df_mov_det_filtrado.empty:
-        logger.warning("⚠️ No hay detalles con familias target")
         return pd.DataFrame(), pd.DataFrame()
     
     # Crear equipo_brazo
@@ -503,16 +499,15 @@ def process_tabla_mes(año, mes, compania):
         axis=1
     )
     
-    # 🔥 CORREGIDO: Usar 'entrega_id' para contar (es el ID que tenemos)
-    # O crear un contador manual
+    # Agrupar entregas
     entregas_mes = df_mov_det_filtrado.groupby(['equipo_brazo', 'familia']).agg({
         'cantidad': lambda x: x.abs().sum(),
-        'entrega_id': 'count'  # 🔥 Usamos 'entrega_id' en lugar de 'id'
+        'entrega_id': 'count'
     }).reset_index()
     
     entregas_mes = entregas_mes.rename(columns={'entrega_id': 'num_entregas'})
     
-    # Calcular metros del mes
+    # Cargar metros del mes
     df_met_gen = pd.DataFrame(load_metros_general())
     
     df_met_gen_filtrado = df_met_gen[
@@ -526,14 +521,88 @@ def process_tabla_mes(año, mes, compania):
         ]
     
     if df_met_gen_filtrado.empty:
-        logger.warning("⚠️ No hay metros para los filtros")
         return pd.DataFrame(), pd.DataFrame()
     
     df_met_det = pd.DataFrame(met_detalles)
     met_ids = df_met_gen_filtrado['id'].tolist()
     df_met_det_filtrado = df_met_det[df_met_det['registro_id'].isin(met_ids)]
     
-    # Calcular metros por equipo y familia
+    # 🔥 CREAR DICCIONARIO DE METROS POR EQUIPO
+    # Estructura: {equipo_normalizado: {'total_mp': X, 'mp_rimado': Y}}
+    metros_por_equipo = {}
+    
+    for _, row in df_met_gen_filtrado.iterrows():
+        equipo_met = row['equipo']
+        met_id = row['id']
+        
+        # Normalizar: quitar espacios extra y estandarizar
+        equipo_norm = equipo_met.strip()
+        
+        df_det = df_met_det_filtrado[df_met_det_filtrado['registro_id'] == met_id]
+        
+        if not df_det.empty:
+            total_mp = df_det['total_mp'].sum()
+            mp_rimado = df_det['mp_rimado'].sum()
+            
+            if equipo_norm not in metros_por_equipo:
+                metros_por_equipo[equipo_norm] = {'total_mp': 0, 'mp_rimado': 0}
+            
+            metros_por_equipo[equipo_norm]['total_mp'] += total_mp
+            metros_por_equipo[equipo_norm]['mp_rimado'] += mp_rimado
+    
+    # 🔥 FUNCIÓN PARA ENCONTRAR METROS (con lógica de fallback)
+    def encontrar_metros(equipo_brazo, familia):
+        """Busca metros para un equipo_brazo, probando varias estrategias"""
+        
+        # 🔥 Estrategia 1: Buscar el equipo_brazo tal cual
+        if equipo_brazo in metros_por_equipo:
+            if familia.upper() == 'RIMADORAS':
+                return metros_por_equipo[equipo_brazo]['mp_rimado']
+            else:
+                return metros_por_equipo[equipo_brazo]['total_mp']
+        
+        # 🔥 Estrategia 2: Quitar "-BRAZO X" (con mayúsculas)
+        if '-BRAZO' in equipo_brazo.upper():
+            # Encontrar la posición de -BRAZO (case insensitive)
+            equipo_upper = equipo_brazo.upper()
+            pos = equipo_upper.find('-BRAZO')
+            equipo_base = equipo_brazo[:pos].strip()
+            
+            if equipo_base in metros_por_equipo:
+                if familia.upper() == 'RIMADORAS':
+                    return metros_por_equipo[equipo_base]['mp_rimado']
+                else:
+                    return metros_por_equipo[equipo_base]['total_mp']
+        
+        # 🔥 Estrategia 3: Buscar por coincidencia parcial (normalizando espacios)
+        equipo_norm = equipo_brazo.replace(' ', '').replace('-', '').upper()
+        
+        for eq_met, vals in metros_por_equipo.items():
+            eq_met_norm = eq_met.replace(' ', '').replace('-', '').upper()
+            
+            # Si el equipo de metros está contenido en el equipo_brazo
+            if eq_met_norm in equipo_norm or equipo_norm in eq_met_norm:
+                if familia.upper() == 'RIMADORAS':
+                    return vals['mp_rimado']
+                else:
+                    return vals['total_mp']
+        
+        # 🔥 Estrategia 4: Comparar solo los números (ej: 0.64)
+        import re
+        numeros_equipo = re.findall(r'\d+\.\d+', equipo_brazo)
+        
+        if numeros_equipo:
+            num = numeros_equipo[0]
+            for eq_met, vals in metros_por_equipo.items():
+                if num in eq_met:
+                    if familia.upper() == 'RIMADORAS':
+                        return vals['mp_rimado']
+                    else:
+                        return vals['total_mp']
+        
+        return 0
+    
+    # 🔥 CALCULAR RENDIMIENTO
     resultados = []
     
     for _, row in entregas_mes.iterrows():
@@ -542,20 +611,8 @@ def process_tabla_mes(año, mes, compania):
         cantidad = row['cantidad']
         num_entregas = row['num_entregas']
         
-        equipo_base = equipo_brazo.split('-')[0]
-        
-        met_ids_equipo = df_met_gen_filtrado[
-            df_met_gen_filtrado['equipo'] == equipo_base
-        ]['id'].tolist()
-        
-        df_met_equipo = df_met_det_filtrado[
-            df_met_det_filtrado['registro_id'].isin(met_ids_equipo)
-        ]
-        
-        if familia.upper() == 'RIMADORAS':
-            metros = df_met_equipo['mp_rimado'].sum()
-        else:
-            metros = df_met_equipo['total_mp'].sum()
+        # Buscar metros con la función de fallback
+        metros = encontrar_metros(equipo_brazo, familia)
         
         rendimiento = metros / cantidad if cantidad > 0 else 0
         
@@ -594,7 +651,6 @@ def process_tabla_mes(año, mes, compania):
     columnas_orden = ['Equipo_Brazo'] + familias_target
     
     return pivot_entregas[columnas_orden], pivot_rendimiento[columnas_orden]
-
 
 @st.cache_data(ttl=600)
 def process_historico(equipo_seleccionado, meses_atras=12, año_filtro=None):
