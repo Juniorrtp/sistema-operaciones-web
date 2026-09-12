@@ -338,8 +338,9 @@ if os.path.exists(os.path.join(FRONTEND_DIR, "metros")):
     app.mount("/metros", StaticFiles(directory=os.path.join(FRONTEND_DIR, "metros")), name="metros")
 if os.path.exists(os.path.join(FRONTEND_DIR, "stock")):
     app.mount("/stock", StaticFiles(directory=os.path.join(FRONTEND_DIR, "stock")), name="stock")
-
-
+# ✅ AGREGAR ESTAS 2 LÍNEAS
+if os.path.exists(os.path.join(FRONTEND_DIR, "maestros")):
+    app.mount("/maestros", StaticFiles(directory=os.path.join(FRONTEND_DIR, "maestros")), name="maestros")
 @app.get("/")
 async def servir_index(request: Request):
     """Sirve la página principal o redirige a login"""
