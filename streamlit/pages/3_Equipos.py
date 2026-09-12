@@ -836,8 +836,19 @@ with tab2:
             st.markdown("### 📊 Rendimiento (m/unidad)")
             html_rendimiento = crear_tabla_html(df_rendimiento, titulo="")
             st.markdown(html_rendimiento, unsafe_allow_html=True)
-            
-            # ============================================
+            # 🔍 DEBUG temporal
+            with st.expander("🔍 DEBUG - Ver datos", expanded=False):
+                st.write("### Equipos con entregas")
+                st.write(df_entregas['Equipo_Brazo'].tolist())
+                
+                st.write("### Equipos con metros (en metros_general)")
+                df_met_gen = pd.DataFrame(load_metros_general())
+                df_met_gen_filtrado = df_met_gen[
+                    (df_met_gen['ano'] == int(año_tabla)) &
+                    (df_met_gen['mes'] == mes_tabla)
+                ]
+                st.write(df_met_gen_filtrado['equipo'].unique().tolist())
+                        # ============================================
             # GRÁFICO DE RENDIMIENTO
             # ============================================
             df_rendimiento_melt = df_rendimiento.melt(
