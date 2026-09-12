@@ -1001,18 +1001,26 @@ async def get_detalles_movimientos():
     
 @app.get("/api/metros")
 async def listar_metros(
+    request: Request,
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
     limit: int = 100
 ):
+    user = verify_request(request)
+    
     try:
         db = get_db()
         query = db.client.table("metros_general").select("*")
+        
         if fecha_desde:
             query = query.gte("fecha", fecha_desde)
         if fecha_hasta:
             query = query.lte("fecha", fecha_hasta)
-        query = query.order("fecha", desc=True).limit(limit)
+        
+        # ✅ Ordenar por fecha descendente (más reciente primero)
+        # y luego por turno (NOCHE antes que DIA)
+        query = query.order("fecha", desc=True).order("turno", desc=True).limit(limit)
+        
         result = query.execute()
         return result.data if result.data else []
     except Exception as e:
