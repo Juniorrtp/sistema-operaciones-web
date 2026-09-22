@@ -1446,12 +1446,11 @@ async def exportar_excel(
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             
+            # ============================================================
+            # MOVIMIENTOS
+            # ============================================================
             if tipo == "movimientos" or tipo == "todos":
-                # ============================================================
-                # MOVIMIENTOS - UNA SOLA HOJA
-                # ============================================================
                 
-                # Obtener movimientos
                 mov_result = db.client.table("movimiento_general") \
                     .select("*") \
                     .gte("fecha", desde) \
@@ -1459,31 +1458,45 @@ async def exportar_excel(
                     .order("fecha", desc=True) \
                     .execute()
                 
+                print(f"📊 [EXPORT] Movimientos generales: {len(mov_result.data) if mov_result.data else 0}")
+                
                 if mov_result.data:
-                    # Obtener IDs para detalles
                     ids = [row['id'] for row in mov_result.data]
-                    detalles_result = db.client.table("movimiento_detalles") \
-                        .select("*") \
-                        .in_("entrega_id", ids) \
-                        .execute() if ids else []
+                    print(f"📊 [EXPORT] Total IDs movimientos: {len(ids)}")
                     
-                    # Crear diccionario de detalles por entrega_id
+                    # ✅ DIVIDIR EN LOTES DE 500
+                    todos_los_detalles = []
+                    lote_size = 500
+                    
+                    for i in range(0, len(ids), lote_size):
+                        lote_ids = ids[i:i + lote_size]
+                        detalles_lote = db.client.table("movimiento_detalles") \
+                            .select("*") \
+                            .in_("entrega_id", lote_ids) \
+                            .execute()
+                        
+                        if detalles_lote.data:
+                            todos_los_detalles.extend(detalles_lote.data)
+                    
+                    print(f"📊 [EXPORT] Total detalles movimientos: {len(todos_los_detalles)}")
+                    
+                    # ✅ Diccionario con IDs como STRING
                     detalles_por_id = {}
-                    for det in detalles_result.data or []:
-                        entrega_id = det.get('entrega_id')
+                    for det in todos_los_detalles:
+                        entrega_id = str(det.get('entrega_id'))
                         if entrega_id not in detalles_por_id:
                             detalles_por_id[entrega_id] = []
                         detalles_por_id[entrega_id].append(det)
                     
-                    # Construir filas (general + detalles)
+                    # Construir filas
                     rows = []
                     for mov in mov_result.data:
-                        detalles = detalles_por_id.get(mov['id'], [])
+                        mov_id = str(mov.get('id'))
+                        detalles = detalles_por_id.get(mov_id, [])
                         
                         if detalles:
                             for det in detalles:
                                 row = {
-                                    # Generales
                                     'ID': mov.get('id'),
                                     'Fecha': mov.get('fecha'),
                                     'Mes': mov.get('mes'),
@@ -1495,7 +1508,6 @@ async def exportar_excel(
                                     'Equipo': mov.get('equipo'),
                                     'Compañía': mov.get('compania'),
                                     'Estado': mov.get('estado'),
-                                    # Detalles
                                     'Brazo': det.get('brazo'),
                                     'Código': det.get('codigo'),
                                     'Descripción': det.get('descripcion'),
@@ -1505,7 +1517,6 @@ async def exportar_excel(
                                 }
                                 rows.append(row)
                         else:
-                            # Si no hay detalles, una fila con datos generales
                             row = {
                                 'ID': mov.get('id'),
                                 'Fecha': mov.get('fecha'),
@@ -1527,16 +1538,15 @@ async def exportar_excel(
                             }
                             rows.append(row)
                     
+                    print(f"📊 [EXPORT] Total filas movimientos: {len(rows)}")
                     df = pd.DataFrame(rows)
                     df.to_excel(writer, sheet_name='Movimientos', index=False)
-                    
-                            
+            
+            # ============================================================
+            # METROS
+            # ============================================================
             if tipo == "metros" or tipo == "todos":
-            # ============================================================
-            # METROS - UNA SOLA HOJA
-            # ============================================================
                 
-                # Obtener metros
                 met_result = db.client.table("metros_general") \
                     .select("*") \
                     .gte("fecha", desde) \
@@ -1547,11 +1557,10 @@ async def exportar_excel(
                 print(f"📊 [EXPORT] Metros generales: {len(met_result.data) if met_result.data else 0}")
                 
                 if met_result.data:
-                    # Obtener IDs para detalles
                     ids = [row['id'] for row in met_result.data]
-                    print(f"📊 [EXPORT] Total IDs: {len(ids)}")
+                    print(f"📊 [EXPORT] Total IDs metros: {len(ids)}")
                     
-                    # ✅ DIVIDIR EN LOTES DE 500 PARA EVITAR LÍMITES
+                    # ✅ DIVIDIR EN LOTES DE 500
                     todos_los_detalles = []
                     lote_size = 500
                     
@@ -1568,27 +1577,33 @@ async def exportar_excel(
                             todos_los_detalles.extend(detalles_lote.data)
                             print(f"📊 [EXPORT] Lote {i//lote_size + 1}: {len(detalles_lote.data)} detalles")
                     
-                    print(f"📊 [EXPORT] Total detalles: {len(todos_los_detalles)}")
+                    print(f"📊 [EXPORT] Total detalles metros: {len(todos_los_detalles)}")
                     
-                    # Crear diccionario de detalles por registro_id
+                    # ✅ Diccionario con IDs como STRING
                     detalles_por_id = {}
                     for det in todos_los_detalles:
-                        registro_id = det.get('registro_id')
+                        registro_id = str(det.get('registro_id'))
                         if registro_id not in detalles_por_id:
                             detalles_por_id[registro_id] = []
                         detalles_por_id[registro_id].append(det)
                     
                     print(f"📊 [EXPORT] Grupos: {len(detalles_por_id)}")
+                    print(f"🔍 Primeros 5 IDs en diccionario: {list(detalles_por_id.keys())[:5]}")
                     
                     # Construir filas
                     rows = []
                     for met in met_result.data:
-                        detalles = detalles_por_id.get(met['id'], [])
+                        met_id = str(met.get('id'))
+                        detalles = detalles_por_id.get(met_id, [])
+                        
+                        # ✅ LOG para el metro 5844
+                        if met_id == '5844':
+                            print(f"🔍 METRO 5844: met_id={met_id}, detalles encontrados: {len(detalles)}")
+                            print(f"🔍 ¿Está '5844' en diccionario?: {'5844' in detalles_por_id}")
                         
                         if detalles:
                             for det in detalles:
                                 row = {
-                                    # Generales
                                     'ID': met.get('id'),
                                     'Fecha': met.get('fecha'),
                                     'Mes': met.get('mes'),
@@ -1599,7 +1614,6 @@ async def exportar_excel(
                                     'Compañía': met.get('compania'),
                                     'Tipo Perforación': met.get('tipo_perforacion'),
                                     'Total MP': met.get('total_mp'),
-                                    # Detalles
                                     'Brazo': det.get('brazo'),
                                     'Código Actividad': det.get('cod_ac'),
                                     'Actividad': det.get('actividad'),
@@ -1614,7 +1628,6 @@ async def exportar_excel(
                                 }
                                 rows.append(row)
                         else:
-                            print(f"⚠️ [EXPORT] Metro {met['id']} SIN detalles")
                             row = {
                                 'ID': met.get('id'),
                                 'Fecha': met.get('fecha'),
@@ -1626,7 +1639,7 @@ async def exportar_excel(
                                 'Compañía': met.get('compania'),
                                 'Tipo Perforación': met.get('tipo_perforacion'),
                                 'Total MP': met.get('total_mp'),
-                                'Brazo': '⚠️ SIN DETALLES',
+                                'Brazo': '',
                                 'Código Actividad': '',
                                 'Actividad': '',
                                 'Nivel': '',
@@ -1640,12 +1653,13 @@ async def exportar_excel(
                             }
                             rows.append(row)
                     
-                    print(f"📊 [EXPORT] Total filas: {len(rows)}")
-                    
+                    print(f"📊 [EXPORT] Total filas metros: {len(rows)}")
                     df = pd.DataFrame(rows)
                     df.to_excel(writer, sheet_name='Metros', index=False)
             
-            # Metadatos
+            # ============================================================
+            # METADATOS
+            # ============================================================
             metadata = pd.DataFrame({
                 'Campo': ['Fecha Desde', 'Fecha Hasta', 'Tipo', 'Exportación', 'Usuario'],
                 'Valor': [
