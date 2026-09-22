@@ -1546,7 +1546,7 @@ async def exportar_excel(
             # METROS
             # ============================================================
             if tipo == "metros" or tipo == "todos":
-                
+    
                 met_result = db.client.table("metros_general") \
                     .select("*") \
                     .gte("fecha", desde) \
@@ -1560,7 +1560,7 @@ async def exportar_excel(
                     ids = [row['id'] for row in met_result.data]
                     print(f"📊 [EXPORT] Total IDs metros: {len(ids)}")
                     
-                    # ✅ DIVIDIR EN LOTES DE 500
+                    # ✅ CONSULTAR DETALLES CON PAGINACIÓN
                     todos_los_detalles = []
                     lote_size = 500
                     
@@ -1568,14 +1568,27 @@ async def exportar_excel(
                         lote_ids = ids[i:i + lote_size]
                         print(f"📊 [EXPORT] Consultando lote {i//lote_size + 1}: {len(lote_ids)} IDs")
                         
-                        detalles_lote = db.client.table("metros_detalles") \
-                            .select("*") \
-                            .in_("registro_id", lote_ids) \
-                            .execute()
+                        # ✅ Paginación para traer TODOS los detalles
+                        page = 0
+                        page_size = 1000
                         
-                        if detalles_lote.data:
+                        while True:
+                            detalles_lote = db.client.table("metros_detalles") \
+                                .select("*") \
+                                .in_("registro_id", lote_ids) \
+                                .range(page * page_size, (page + 1) * page_size - 1) \
+                                .execute()
+                            
+                            if not detalles_lote.data:
+                                break
+                            
                             todos_los_detalles.extend(detalles_lote.data)
-                            print(f"📊 [EXPORT] Lote {i//lote_size + 1}: {len(detalles_lote.data)} detalles")
+                            print(f"📊 [EXPORT] Lote {i//lote_size + 1}, página {page + 1}: {len(detalles_lote.data)} detalles")
+                            
+                            if len(detalles_lote.data) < page_size:
+                                break
+                            
+                            page += 1
                     
                     print(f"📊 [EXPORT] Total detalles metros: {len(todos_los_detalles)}")
                     
@@ -1590,16 +1603,14 @@ async def exportar_excel(
                     print(f"📊 [EXPORT] Grupos: {len(detalles_por_id)}")
                     print(f"🔍 Primeros 5 IDs en diccionario: {list(detalles_por_id.keys())[:5]}")
                     
+                    # ✅ Verificar si 5844 está en el diccionario
+                    print(f"🔍 ¿Está '5844' en diccionario?: {'5844' in detalles_por_id}")
+                    
                     # Construir filas
                     rows = []
                     for met in met_result.data:
                         met_id = str(met.get('id'))
                         detalles = detalles_por_id.get(met_id, [])
-                        
-                        # ✅ LOG para el metro 5844
-                        if met_id == '5844':
-                            print(f"🔍 METRO 5844: met_id={met_id}, detalles encontrados: {len(detalles)}")
-                            print(f"🔍 ¿Está '5844' en diccionario?: {'5844' in detalles_por_id}")
                         
                         if detalles:
                             for det in detalles:
@@ -1656,21 +1667,6 @@ async def exportar_excel(
                     print(f"📊 [EXPORT] Total filas metros: {len(rows)}")
                     df = pd.DataFrame(rows)
                     df.to_excel(writer, sheet_name='Metros', index=False)
-            
-            # ============================================================
-            # METADATOS
-            # ============================================================
-            metadata = pd.DataFrame({
-                'Campo': ['Fecha Desde', 'Fecha Hasta', 'Tipo', 'Exportación', 'Usuario'],
-                'Valor': [
-                    desde, 
-                    hasta, 
-                    tipo,
-                    datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    'admin'
-                ]
-            })
-            metadata.to_excel(writer, sheet_name='Metadatos', index=False)
         
         output.seek(0)
         
