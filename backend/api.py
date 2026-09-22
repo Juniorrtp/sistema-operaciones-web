@@ -1535,60 +1535,87 @@ async def exportar_excel(
             # ============================================================
             # METROS - UNA SOLA HOJA
             # ============================================================
-            
-            # Obtener metros
-            met_result = db.client.table("metros_general") \
-                .select("*") \
-                .gte("fecha", desde) \
-                .lte("fecha", hasta) \
-                .order("fecha", desc=True) \
-                .execute()
-            
-            print(f"📊 [EXPORT] Metros generales: {len(met_result.data) if met_result.data else 0}")
-            
-            if met_result.data:
-                # Obtener IDs para detalles
-                ids = [row['id'] for row in met_result.data]
-                print(f"📊 [EXPORT] Total IDs: {len(ids)}")
                 
-                # ✅ DIVIDIR EN LOTES DE 500 PARA EVITAR LÍMITES
-                todos_los_detalles = []
-                lote_size = 500
+                # Obtener metros
+                met_result = db.client.table("metros_general") \
+                    .select("*") \
+                    .gte("fecha", desde) \
+                    .lte("fecha", hasta) \
+                    .order("fecha", desc=True) \
+                    .execute()
                 
-                for i in range(0, len(ids), lote_size):
-                    lote_ids = ids[i:i + lote_size]
-                    print(f"📊 [EXPORT] Consultando lote {i//lote_size + 1}: {len(lote_ids)} IDs")
+                print(f"📊 [EXPORT] Metros generales: {len(met_result.data) if met_result.data else 0}")
+                
+                if met_result.data:
+                    # Obtener IDs para detalles
+                    ids = [row['id'] for row in met_result.data]
+                    print(f"📊 [EXPORT] Total IDs: {len(ids)}")
                     
-                    detalles_lote = db.client.table("metros_detalles") \
-                        .select("*") \
-                        .in_("registro_id", lote_ids) \
-                        .execute()
+                    # ✅ DIVIDIR EN LOTES DE 500 PARA EVITAR LÍMITES
+                    todos_los_detalles = []
+                    lote_size = 500
                     
-                    if detalles_lote.data:
-                        todos_los_detalles.extend(detalles_lote.data)
-                        print(f"📊 [EXPORT] Lote {i//lote_size + 1}: {len(detalles_lote.data)} detalles")
-                
-                print(f"📊 [EXPORT] Total detalles: {len(todos_los_detalles)}")
-                
-                # Crear diccionario de detalles por registro_id
-                detalles_por_id = {}
-                for det in todos_los_detalles:
-                    registro_id = det.get('registro_id')
-                    if registro_id not in detalles_por_id:
-                        detalles_por_id[registro_id] = []
-                    detalles_por_id[registro_id].append(det)
-                
-                print(f"📊 [EXPORT] Grupos: {len(detalles_por_id)}")
-                
-                # Construir filas
-                rows = []
-                for met in met_result.data:
-                    detalles = detalles_por_id.get(met['id'], [])
+                    for i in range(0, len(ids), lote_size):
+                        lote_ids = ids[i:i + lote_size]
+                        print(f"📊 [EXPORT] Consultando lote {i//lote_size + 1}: {len(lote_ids)} IDs")
+                        
+                        detalles_lote = db.client.table("metros_detalles") \
+                            .select("*") \
+                            .in_("registro_id", lote_ids) \
+                            .execute()
+                        
+                        if detalles_lote.data:
+                            todos_los_detalles.extend(detalles_lote.data)
+                            print(f"📊 [EXPORT] Lote {i//lote_size + 1}: {len(detalles_lote.data)} detalles")
                     
-                    if detalles:
-                        for det in detalles:
+                    print(f"📊 [EXPORT] Total detalles: {len(todos_los_detalles)}")
+                    
+                    # Crear diccionario de detalles por registro_id
+                    detalles_por_id = {}
+                    for det in todos_los_detalles:
+                        registro_id = det.get('registro_id')
+                        if registro_id not in detalles_por_id:
+                            detalles_por_id[registro_id] = []
+                        detalles_por_id[registro_id].append(det)
+                    
+                    print(f"📊 [EXPORT] Grupos: {len(detalles_por_id)}")
+                    
+                    # Construir filas
+                    rows = []
+                    for met in met_result.data:
+                        detalles = detalles_por_id.get(met['id'], [])
+                        
+                        if detalles:
+                            for det in detalles:
+                                row = {
+                                    # Generales
+                                    'ID': met.get('id'),
+                                    'Fecha': met.get('fecha'),
+                                    'Mes': met.get('mes'),
+                                    'Año': met.get('ano'),
+                                    'Turno': met.get('turno'),
+                                    'Operador': met.get('operador'),
+                                    'Equipo': met.get('equipo'),
+                                    'Compañía': met.get('compania'),
+                                    'Tipo Perforación': met.get('tipo_perforacion'),
+                                    'Total MP': met.get('total_mp'),
+                                    # Detalles
+                                    'Brazo': det.get('brazo'),
+                                    'Código Actividad': det.get('cod_ac'),
+                                    'Actividad': det.get('actividad'),
+                                    'Nivel': det.get('nivel_perf'),
+                                    'Labor Perf.': det.get('labor_perf'),
+                                    'Tipo Roca': det.get('tipo_roca'),
+                                    'N° Taladros': det.get('num_tal'),
+                                    'Long. Perf.': det.get('lon_perf'),
+                                    'Rimados': det.get('rimados'),
+                                    'MP Producción': det.get('mp_produccion'),
+                                    'MP Rimado': det.get('mp_rimado'),
+                                }
+                                rows.append(row)
+                        else:
+                            print(f"⚠️ [EXPORT] Metro {met['id']} SIN detalles")
                             row = {
-                                # Generales
                                 'ID': met.get('id'),
                                 'Fecha': met.get('fecha'),
                                 'Mes': met.get('mes'),
@@ -1599,51 +1626,24 @@ async def exportar_excel(
                                 'Compañía': met.get('compania'),
                                 'Tipo Perforación': met.get('tipo_perforacion'),
                                 'Total MP': met.get('total_mp'),
-                                # Detalles
-                                'Brazo': det.get('brazo'),
-                                'Código Actividad': det.get('cod_ac'),
-                                'Actividad': det.get('actividad'),
-                                'Nivel': det.get('nivel_perf'),
-                                'Labor Perf.': det.get('labor_perf'),
-                                'Tipo Roca': det.get('tipo_roca'),
-                                'N° Taladros': det.get('num_tal'),
-                                'Long. Perf.': det.get('lon_perf'),
-                                'Rimados': det.get('rimados'),
-                                'MP Producción': det.get('mp_produccion'),
-                                'MP Rimado': det.get('mp_rimado'),
+                                'Brazo': '⚠️ SIN DETALLES',
+                                'Código Actividad': '',
+                                'Actividad': '',
+                                'Nivel': '',
+                                'Labor Perf.': '',
+                                'Tipo Roca': '',
+                                'N° Taladros': '',
+                                'Long. Perf.': '',
+                                'Rimados': '',
+                                'MP Producción': '',
+                                'MP Rimado': '',
                             }
                             rows.append(row)
-                    else:
-                        print(f"⚠️ [EXPORT] Metro {met['id']} SIN detalles")
-                        row = {
-                            'ID': met.get('id'),
-                            'Fecha': met.get('fecha'),
-                            'Mes': met.get('mes'),
-                            'Año': met.get('ano'),
-                            'Turno': met.get('turno'),
-                            'Operador': met.get('operador'),
-                            'Equipo': met.get('equipo'),
-                            'Compañía': met.get('compania'),
-                            'Tipo Perforación': met.get('tipo_perforacion'),
-                            'Total MP': met.get('total_mp'),
-                            'Brazo': '⚠️ SIN DETALLES',
-                            'Código Actividad': '',
-                            'Actividad': '',
-                            'Nivel': '',
-                            'Labor Perf.': '',
-                            'Tipo Roca': '',
-                            'N° Taladros': '',
-                            'Long. Perf.': '',
-                            'Rimados': '',
-                            'MP Producción': '',
-                            'MP Rimado': '',
-                        }
-                        rows.append(row)
-                
-                print(f"📊 [EXPORT] Total filas: {len(rows)}")
-                
-                df = pd.DataFrame(rows)
-                df.to_excel(writer, sheet_name='Metros', index=False)
+                    
+                    print(f"📊 [EXPORT] Total filas: {len(rows)}")
+                    
+                    df = pd.DataFrame(rows)
+                    df.to_excel(writer, sheet_name='Metros', index=False)
             
             # Metadatos
             metadata = pd.DataFrame({
